@@ -1,0 +1,163 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@import 'leaflet/dist/leaflet.css';
+
+@theme inline {
+  --font-sans: var(--font-hind), ui-sans-serif, system-ui, sans-serif;
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  --color-sun: #f59e0b;
+  --color-sun-dark: #d97706;
+  --color-sun-soft: #fef3c7;
+  --color-teal-deep: #0f5c5e;
+  --color-teal-soft: #e0efed;
+  --color-cream: #fff9ef;
+  --color-sand: #f6ead6;
+  --color-ink: #2b2118;
+  --color-ink-soft: #6a5a49;
+}
+
+:root {
+  color-scheme: light;
+  --background: #fff9ef;
+  --foreground: #2b2118;
+  --card: #ffffff;
+  --card-foreground: #2b2118;
+  --popover: #ffffff;
+  --popover-foreground: #2b2118;
+  --primary: #f59e0b;
+  --primary-foreground: #2b2118;
+  --secondary: #0f5c5e;
+  --secondary-foreground: #ffffff;
+  --muted: #f6ead6;
+  --muted-foreground: #6a5a49;
+  --accent: #fef3c7;
+  --accent-foreground: #2b2118;
+  --destructive: #b42318;
+  --border: #ecdcc3;
+  --input: #e2cfae;
+  --ring: #d97706;
+  --radius: 0.625rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-sand font-sans text-ink antialiased;
+  }
+}
+
+@media (min-width: 1024px) {
+  :where(
+      a,
+      button,
+      summary,
+      [tabindex],
+      input[type='range'],
+      input[type='checkbox'],
+      input[type='radio']
+    ):focus-visible {
+    outline: 3px solid #b45309;
+    outline-offset: 2px;
+  }
+}
+
+@keyframes camera-flash {
+  0% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes pin-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+.animate-camera-flash {
+  animation: camera-flash 380ms ease-out forwards;
+}
+
+.pin-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pin-pulse 1.8s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pin-pulse {
+    animation: none;
+  }
+  .animate-camera-flash {
+    animation-duration: 1ms;
+  }
+}
+
+/* Leaflet (satellite map) */
+.leaflet-container {
+  background: #1d2a22;
+  font-family: inherit;
+}
+.leaflet-control-attribution {
+  font-size: 10px;
+}
+
+@media print {
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Print only the plan report: everything else on the page is dropped from the layout. */
+  body > *:not(#print-report) {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  @page {
+    margin: 14mm;
+  }
+}

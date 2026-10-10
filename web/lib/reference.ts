@@ -1,0 +1,32 @@
+import type { ReferenceData } from './api'
+import type { FinanceParams } from './mockData'
+
+/** Used only if GET /reference cannot be reached. Live values come from backend/reference.json. */
+export const FALLBACK_REFERENCE: ReferenceData = {
+  panel: { widthM: 1.13, lengthM: 2.28, gapM: 0.03, kWp: 0.55 },
+  subsidy: { centralPerKwFirst2: 30000, centralThirdKw: 18000, centralCap: 78000, residentialOnly: true },
+  cost: { firstKwRange: [60000, 75000], extraKwRange: [55000, 65000] },
+  co2: { kgPerKwh: 0.71 },
+  defaults: { avgTariff: 7.0, performanceKwhPerKwp: 1450 },
+  states: {},
+}
+
+export const tariffFor = (ref: ReferenceData, stateCode: string) =>
+  ref.states[(stateCode || '').toUpperCase()]?.avgTariff ?? ref.defaults.avgTariff
+
+/** Inputs for the on-device finance stand-in used while POST /finance loads or is down. */
+export function financeParamsFrom(ref: ReferenceData, stateCode: string): FinanceParams {
+  const tariff = tariffFor(ref, stateCode)
+  const [f0, f1] = ref.cost.firstKwRange
+  const [e0, e1] = ref.cost.extraKwRange
+  return {
+    costPerKwRange: [Math.round((f0 + 2 * e0) / 3), Math.round((f1 + 2 * e1) / 3)],
+    tariffRangePerUnit: [tariff * 0.95, tariff * 1.05],
+    co2KgPerKwh: ref.co2.kgPerKwh,
+    subsidy: {
+      perKwFirstTwo: ref.subsidy.centralPerKwFirst2,
+      thirdKw: ref.subsidy.centralThirdKw,
+      cap: ref.subsidy.centralCap,
+    },
+  }
+}

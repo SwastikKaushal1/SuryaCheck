@@ -1,0 +1,21 @@
+# Run everything with:  docker compose up --build
+# Both ports are bound to 127.0.0.1, so the app is reachable only from THIS computer
+# (not from other devices on your Wi-Fi).
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      args:
+        # The browser (on your computer) calls the backend, so this is localhost, not "backend".
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped

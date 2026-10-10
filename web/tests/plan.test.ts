@@ -1,0 +1,75 @@
+import { skylineLossPct } from '../lib/solar'
+import { buildPlanModel, DEFAULT_PANEL, TILTS } from '../lib/plan'
+import { financeParamsFrom, FALLBACK_REFERENCE } from '../lib/reference'
+import { GEO_MPU, lngLatToUnits, unitsToLngLat } from '../lib/geo'
+import { polygonArea, pointInPolygon, rectCorners } from '../lib/geometry'
+let fails = 0
+const ok = (c: boolean, m: string) => { console.log((c ? 'PASS ' : 'FAIL ') + m); if (!c) fails++ }
+
+const f = { lat: 28.5245, lng: 77.2066 }
+const b = unitsToLngLat(f, { x: 260, y: 90 }), r = lngLatToUnits(f, b)
+ok(Math.abs(r.x - 260) < 1e-6 && Math.abs(r.y - 90) < 1e-6, 'geo round trip')
+
+const ring = (W: number, H: number, deg = 15) => { const t = deg * Math.PI / 180
+  return [[-W/2,-H/2],[W/2,-H/2],[W/2,H/2],[-W/2,H/2]].map(([x,y]) => ({ x: 200 + (x*Math.cos(t)-y*Math.sin(t))/GEO_MPU, y: 150 + (x*Math.sin(t)+y*Math.cos(t))/GEO_MPU })) }
+const mk = (W: number, H: number) => { const p = ring(W, H); return { points: p, areaM2: Math.round(polygonArea(p)*GEO_MPU**2), metersPerUnit: GEO_MPU, source: 'detected' as const } }
+// PVGIS-like: best near 25 deg, ~1600 kWh/kWp
+const yields: Record<string, number> = {}; TILTS.forEach(t => yields[String(t)] = 1600 - Math.abs(t - 25) * 4)
+const fp = financeParamsFrom(FALLBACK_REFERENCE, 'DL')
+const base = { obstacles: [], neighbours: [], flush: false, latitude: 28.5, panel: DEFAULT_PANEL, yields, fallbackYield: 1450, skyline: null, financeParams: fp, eligible: true }
+const units = (u: number) => u * 12
+
+const big = mk(14.7, 11)  // ~162 m2, fits ~26+ panels
+const small = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(385) })   // Rs2500 bill
+console.log('Rs2500 bill ->', small.numbers, 'tilt', small.tilt)
+ok(small.numbers.limitedBy === 'bill', 'a modest bill is limited by the bill, not the roof')
+ok(small.numbers.panelsFinal <= 8 && small.numbers.panelsFinal >= 4, `Rs2500 bill gets a small system (${small.numbers.panelsFinal} panels, ${small.numbers.kWp} kW)`)
+ok(small.numbers.coverage! >= 1 && small.numbers.coverage! < 1.25, `covers ~100% of use (${(small.numbers.coverage!*100).toFixed(0)}%)`)
+ok(small.numbers.panelsFit > small.numbers.panelsFinal, 'roof could hold more than we recommend')
+ok(small.panels.length === small.numbers.panelsFinal, 'only recommended panels are drawn')
+ok(small.tilt >= 15 && small.tilt <= 30, `chosen tilt is sensible (${small.tilt})`)
+
+const huge = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(6000) })
+ok(huge.numbers.limitedBy === 'roof' && huge.numbers.panelsFinal === huge.numbers.panelsFit, `huge bill uses the whole roof (${huge.numbers.panelsFinal})`)
+ok(huge.numbers.coverage! < 1, `and says it only covers part (${(huge.numbers.coverage!*100).toFixed(0)}%)`)
+ok(huge.tilt <= small.tilt, `roof-limited house prefers a lower tilt to fit more (${huge.tilt} vs ${small.tilt})`)
+
+const tinyRoof = buildPlanModel({ ...base, roof: mk(5, 4), consumptionKwhYear: units(385) })
+ok(tinyRoof.numbers.limitedBy === 'roof' && tinyRoof.numbers.coverage! < 1, `small roof is the limit (${tinyRoof.numbers.panelsFinal} panels, ${(tinyRoof.numbers.coverage!*100).toFixed(0)}%)`)
+
+const mid = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(150) })
+ok(mid.numbers.panelsFinal < small.numbers.panelsFinal, 'smaller bill => fewer panels')
+
+const none = buildPlanModel({ ...base, roof: big, consumptionKwhYear: null })
+ok(none.numbers.panelsFinal === none.numbers.panelsFit, 'no bill known => size to the roof')
+
+const hy: Record<string, number> = {}; TILTS.forEach(t => hy[String(t)] = yields[String(t)] * 0.85)
+const sky = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(385), skyline: { lossPct: 15, yields: hy, source: 'pvgis' } })
+ok(sky.numbers.panelsFinal > small.numbers.panelsFinal, `skyline shade => a few more panels to compensate (${small.numbers.panelsFinal} -> ${sky.numbers.panelsFinal})`)
+ok(sky.numbers.kWhFinal < sky.numbers.kWhBefore, 'and before/after energy differ')
+
+const withTank = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(6000), obstacles: [{ id: 't', kind: 'tank', x: 200, y: 150, w: 26, h: 26, heightM: 2 }] })
+ok(withTank.numbers.panelsFit < huge.numbers.panelsFit, 'tank reduces what fits')
+ok(small.panels.every(p => rectCorners(p).every(c => pointInPolygon(c, big.points))), 'every panel inside the roof')
+
+const flush = buildPlanModel({ ...base, roof: big, flush: true, consumptionKwhYear: units(6000) })
+ok(flush.flush && flush.numbers.panelsFit >= huge.numbers.panelsFit, `flush roof: tilt not chosen, fits as many or more (${flush.numbers.panelsFit})`)
+// tall neighbour: casts real shadow on the roof, but only above the height of your own house
+const tall = { id: 'n', side: 'W' as const, floors: 6 }
+const nbr = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(6000), neighbours: [tall], houseFloors: 2 })
+const nbrNone = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(6000) })
+ok(nbr.numbers.kWhFinal < nbrNone.numbers.kWhFinal, `tall neighbour lowers output (${nbrNone.numbers.kWhFinal} -> ${nbr.numbers.kWhFinal})`)
+ok(nbr.shadowsAt(9).length > 0, 'neighbour shadow is drawn')
+const lowNbr = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(6000), neighbours: [tall], houseFloors: 6 })
+ok(lowNbr.numbers.kWhFinal >= nbr.numbers.kWhFinal, 'taller own house => less shade from the neighbour')
+const placed = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(6000), neighbours: [{ ...tall, rect: { x: 900, y: 900, w: 60, h: 60 } }], houseFloors: 2 })
+ok(placed.numbers.kWhFinal > nbr.numbers.kWhFinal, 'dragged far away => no shade')
+const t0 = Date.now(); buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(385) }); ok(Date.now() - t0 < 400, `fast (${Date.now()-t0} ms)`)
+
+// shade check: open sky costs nothing, a closed-in street costs real energy
+const flatH = (d: number) => Array.from({ length: 36 }, () => d)
+ok(skylineLossPct(flatH(3)) === 0, 'open sky => 0% loss')
+ok(skylineLossPct(flatH(30)) > 15, `closed-in street => big loss (${skylineLossPct(flatH(30))}%)`)
+ok(skylineLossPct(flatH(30)) > skylineLossPct(flatH(12)), 'taller surroundings => more loss')
+
+console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED'); process.exit(fails ? 1 : 0)

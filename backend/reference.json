@@ -1,0 +1,28 @@
+{
+  "_note": "Indicative values. Every number marked verify must be re-checked against official sources before the demo.",
+  "panel": { "widthM": 1.13, "lengthM": 2.28, "gapM": 0.03, "kWp": 0.55, "verify": "check against a real datasheet" },
+  "subsidy": {
+    "centralPerKwFirst2": 30000,
+    "centralThirdKw": 18000,
+    "centralCap": 78000,
+    "residentialOnly": true,
+    "verify": "pmsuryaghar.gov.in"
+  },
+  "cost": {
+    "firstKwRange": [60000, 75000],
+    "extraKwRange": [55000, 65000],
+    "verify": "vendor pages, indicative only"
+  },
+  "co2": { "kgPerKwh": 0.71, "verify": "use the current CEA grid emission factor and cite it" },
+  "defaults": { "avgTariff": 7.0, "performanceKwhPerKwp": 1450, "verify": "placeholder tariff, replace per state" },
+  "states": {
+    "DL": { "name": "Delhi",         "avgTariff": 6.5, "topUp": 0, "verify": "DISCOM tariff order; Delhi state top-up not confirmed" },
+    "HR": { "name": "Haryana",       "avgTariff": 6.5, "topUp": 0, "verify": "UHBVN/DHBVN tariff order; state top-up not confirmed" },
+    "UP": { "name": "Uttar Pradesh", "avgTariff": 6.5, "topUp": 0, "verify": "UPERC tariff order; state top-up not confirmed" },
+    "RJ": { "name": "Rajasthan",     "avgTariff": 7.0, "topUp": 0, "verify": "RERC tariff order" },
+    "GJ": { "name": "Gujarat",       "avgTariff": 5.5, "topUp": 0, "verify": "GERC tariff order" },
+    "MH": { "name": "Maharashtra",   "avgTariff": 9.0, "topUp": 0, "verify": "MERC tariff order" },
+    "KA": { "name": "Karnataka",     "avgTariff": 7.0, "topUp": 0, "verify": "KERC tariff order" },
+    "TN": { "name": "Tamil Nadu",    "avgTariff": 5.5, "topUp": 0, "verify": "TNERC tariff order" }
+  }
+}
