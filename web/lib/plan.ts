@@ -2,6 +2,7 @@ import { calcFinance, type FinanceResult } from './finance'
 import { clamp, pointInPolygon, polygonBounds, polygonCentroid, rectCorners, rectsOverlap, scalePolygon, type Rect } from './geometry'
 import type { FinanceParams, Neighbour, Obstacle, Point, RoofData } from './mockData'
 import { neighbourBlock } from './neighbours'
+import { castsShadow } from './obstacles'
 import { seasonsFor, shadowHull, sunPosition } from './solar'
 
 /** Panel size and power. Live values come from GET /reference. */
@@ -114,7 +115,7 @@ export function buildPlanModel(args: PlanArgs): PlanModel {
 
   const blocks = neighbours.map((n) => neighbourBlock(n, roof.points, mpu, houseFloors))
   const hullsAt = (sun: { azimuth: number; elevation: number }) => [
-    ...obstacles.map((o) => shadowHull(o, sun, mpu)),
+    ...obstacles.filter(castsShadow).map((o) => shadowHull(o, sun, mpu)),
     ...blocks.map((o) => shadowHull(o, sun, mpu, 40)),
   ]
   const samples: { weight: number; hulls: Point[][] }[] = []

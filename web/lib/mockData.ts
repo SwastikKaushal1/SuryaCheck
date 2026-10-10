@@ -36,7 +36,8 @@ export interface RoofData {
   containsPin?: boolean
 }
 
-export type ObstacleKind = 'tank' | 'stairs' | 'parapet' | 'heater'
+export type ObstacleKind =
+  | 'tank' | 'stairs' | 'parapet' | 'heater' | 'ac' | 'dish' | 'chimney' | 'tree' | 'custom' | 'clear'
 
 export interface Obstacle {
   id: string
@@ -46,6 +47,10 @@ export interface Obstacle {
   w: number
   h: number
   heightM: number
+  /** Footprint shape. Defaults to round for tanks, box for everything else. */
+  shape?: 'box' | 'round'
+  /** Optional name the person gave it, shown on the map. */
+  name?: string
 }
 
 export interface Neighbour {

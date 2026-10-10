@@ -1,5 +1,6 @@
 import { clamp, convexHull, rectCorners } from './geometry'
 import type { Obstacle, Point, SkylineStop } from './mockData'
+import { isRound } from './obstacles'
 
 export interface Season {
   name: 'winter' | 'equinox' | 'summer'
@@ -44,12 +45,17 @@ export function shadowHull(
   /** Longest shadow to draw. Tanks and rooms are short; tall neighbours need more. */
   maxLengthM = 8,
 ): Point[] {
-  const footprint = rectCorners({
-    x: obstacle.x - obstacle.w / 2,
-    y: obstacle.y - obstacle.h / 2,
-    w: obstacle.w,
-    h: obstacle.h,
-  })
+  const footprint = isRound(obstacle)
+    ? Array.from({ length: 20 }, (_, i) => {
+        const a = (i / 20) * 2 * Math.PI
+        return { x: obstacle.x + (obstacle.w / 2) * Math.cos(a), y: obstacle.y + (obstacle.h / 2) * Math.sin(a) }
+      })
+    : rectCorners({
+        x: obstacle.x - obstacle.w / 2,
+        y: obstacle.y - obstacle.h / 2,
+        w: obstacle.w,
+        h: obstacle.h,
+      })
   const lengthM = Math.min(maxLengthM, obstacle.heightM / Math.tan(rad(Math.max(sun.elevation, 6))))
   const lengthUnits = lengthM / metersPerUnit
   const dx = -Math.sin(rad(sun.azimuth)) * lengthUnits

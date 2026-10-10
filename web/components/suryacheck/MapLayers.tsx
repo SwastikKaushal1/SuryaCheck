@@ -3,7 +3,7 @@ import { toPoints } from '@/lib/geometry'
 import { neighbourBlock } from '@/lib/neighbours'
 import type { Neighbour, Obstacle, Point } from '@/lib/mockData'
 import { GEO_MPU } from '@/lib/geo'
-import { presetFor } from '@/lib/obstacles'
+import { isRound, presetFor } from '@/lib/obstacles'
 import { useMapView } from './SatelliteMap'
 
 export function RoofOutline({ points, fillOpacity = 0.28, dashed = false }: { points: Point[]; fillOpacity?: number; dashed?: boolean }) {
@@ -155,18 +155,29 @@ export function ObstacleLayer({ obstacles, labels = false }: { obstacles: Obstac
         const x0 = o.x - o.w / 2
         const y0 = o.y - o.h / 2
         const fs = 11 / scale
-        const text = `${preset.short} · ${o.heightM} m`
-        const topY = y0 - rise
+        const clear = o.kind === 'clear'
+        const round = isRound(o)
+        const name = (o.name?.trim() || preset.short).slice(0, 18)
+        const text = clear ? name : `${name} · ${o.heightM} m`
+        const labelW = Math.max(68, text.length * 6.4 + 18)
+        const topY = clear ? y0 : y0 - rise
         return (
           <g key={o.id}>
-            {o.kind === 'tank' ? (
+            {clear ? (
+              <>
+                <rect x={x0} y={y0} width={o.w} height={o.h} rx="2" fill={preset.color} opacity="0.28" />
+                <rect x={x0} y={y0} width={o.w} height={o.h} rx="2" fill="none" stroke="#b45309" strokeWidth="1.6" strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />
+                <line x1={x0} y1={y0} x2={x0 + o.w} y2={y0 + o.h} stroke="#b45309" strokeWidth="1" opacity="0.55" vectorEffect="non-scaling-stroke" />
+                <line x1={x0 + o.w} y1={y0} x2={x0} y2={y0 + o.h} stroke="#b45309" strokeWidth="1" opacity="0.55" vectorEffect="non-scaling-stroke" />
+              </>
+            ) : round ? (
               <>
                 <ellipse cx={o.x} cy={o.y} rx={o.w / 2} ry={o.h / 2} fill={preset.color} />
                 <rect x={x0} y={o.y - rise} width={o.w} height={rise} fill={preset.color} />
                 <rect x={x0} y={o.y - rise} width={o.w} height={rise} fill="url(#sc-wall)" />
-                <ellipse cx={o.x} cy={o.y - rise} rx={o.w / 2} ry={o.h / 2} fill="#9ad3ee" stroke="#fff" strokeWidth="1.3" vectorEffect="non-scaling-stroke" />
+                <ellipse cx={o.x} cy={o.y - rise} rx={o.w / 2} ry={o.h / 2} fill={o.kind === 'tank' ? '#9ad3ee' : preset.color} stroke="#fff" strokeWidth="1.3" vectorEffect="non-scaling-stroke" />
                 <ellipse cx={o.x - o.w * 0.12} cy={o.y - rise - o.h * 0.1} rx={o.w * 0.22} ry={o.h * 0.16} fill="#fff" opacity="0.55" />
-                <circle cx={o.x} cy={o.y - rise} r={Math.max(1.2, o.w * 0.08)} fill="#3b82a8" />
+                {o.kind === 'tank' && <circle cx={o.x} cy={o.y - rise} r={Math.max(1.2, o.w * 0.08)} fill="#3b82a8" />}
               </>
             ) : (
               <>
@@ -188,7 +199,7 @@ export function ObstacleLayer({ obstacles, labels = false }: { obstacles: Obstac
             )}
             {labels && (
               <g transform={`translate(${o.x} ${topY - o.h / 2 - 8 / scale})`}>
-                <rect x={-34 / scale} y={-9 / scale} width={68 / scale} height={18 / scale} rx={9 / scale} fill="#1f2937" opacity="0.88" />
+                <rect x={-labelW / 2 / scale} y={-9 / scale} width={labelW / scale} height={18 / scale} rx={9 / scale} fill="#1f2937" opacity="0.88" />
                 <text y={4 / scale} textAnchor="middle" fontSize={fs} fontWeight="700" fill="#fff">
                   {text}
                 </text>

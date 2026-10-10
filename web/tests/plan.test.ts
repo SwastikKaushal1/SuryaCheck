@@ -72,4 +72,20 @@ ok(skylineLossPct(flatH(3)) === 0, 'open sky => 0% loss')
 ok(skylineLossPct(flatH(30)) > 15, `closed-in street => big loss (${skylineLossPct(flatH(30))}%)`)
 ok(skylineLossPct(flatH(30)) > skylineLossPct(flatH(12)), 'taller surroundings => more loss')
 
+
+// custom items: round shadow, keep-clear zone, heights
+import { shadowHull as sh } from '../lib/solar'
+const sun0 = { azimuth: 180, elevation: 30 }
+const roundObj = { id: 'r', kind: 'custom' as const, shape: 'round' as const, x: 200, y: 150, w: 40, h: 40, heightM: 2 }
+const boxObj = { ...roundObj, id: 'b', shape: 'box' as const }
+ok(sh(roundObj, sun0, GEO_MPU).length > 8, 'round item casts a rounded shadow outline')
+ok(sh(boxObj, sun0, GEO_MPU).length <= 6, 'box item casts a straight-edged shadow')
+const zone = { id: 'z', kind: 'clear' as const, x: 200, y: 150, w: 60, h: 120, heightM: 0 }
+const withZone = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(6000), obstacles: [zone] })
+ok(withZone.numbers.panelsFit < huge.numbers.panelsFit, `keep-clear zone removes panel spots (${huge.numbers.panelsFit} -> ${withZone.numbers.panelsFit})`)
+ok(!withZone.panels.some(p => Math.abs((p.x + p.w / 2) - 200) < 28 && Math.abs((p.y + p.h / 2) - 150) < 58), 'no panel sits inside the keep-clear zone')
+const tallBox = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(6000), obstacles: [{ ...boxObj, heightM: 4 }] })
+const lowBox = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(6000), obstacles: [{ ...boxObj, heightM: 0.5 }] })
+ok(tallBox.numbers.kWhFinal < lowBox.numbers.kWhFinal, 'a taller custom item never helps yield')
+
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED'); process.exit(fails ? 1 : 0)
