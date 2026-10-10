@@ -4,16 +4,27 @@ import { Button } from '../Button'
 import { Card, StatCard } from '../Card'
 import { fitRectFor, SatelliteMap, ScaleBar } from '../SatelliteMap'
 import { TiltDiagram } from '../TiltDiagram'
-import { NeighbourLayer, ObstacleLayer, PanelLayer, RoofOutline, ShadowLayer } from '../MapLayers'
+import { NeighbourLayer, ObstacleLayer, PanelDimension, PanelLayer, RoofOutline, ShadowLayer } from '../MapLayers'
 import { Tag } from '../Tag'
 import { MAP_FILL, SIDE_PANEL, SPLIT, STICKY_MAP_PANEL } from '../layout'
 import { inr, kw, lakhRange, num, yearsRange } from '@/lib/format'
-import type { FinanceParams } from '@/lib/mockData'
+import type { FinanceParams, Point } from '@/lib/mockData'
 import type { PlanModel } from '@/lib/plan'
 import { formatHour, scoreColor, seasonsFor } from '@/lib/solar'
 import type { GeoFrame } from '@/lib/geo'
-import { toPoints } from '@/lib/geometry'
+import { polygonBounds, toPoints } from '@/lib/geometry'
 import { DEFAULT_PANEL } from '@/lib/plan'
+
+/**
+ * One fixed framing for the panels: centred on them, at least 14 m wide, and 4:3 like the map,
+ * so the same plan always looks the same size and tiny systems are not blown up.
+ */
+function closeUpRect(points: Point[], mpu: number) {
+  const b = polygonBounds(points)
+  const w = Math.max(b.w * 1.8, 14 / mpu, (b.h * 2.2 * 4) / 3)
+  const h = (w * 3) / 4
+  return { x: b.minX + b.w / 2 - w / 2, y: b.minY + b.h / 2 - h / 2, w, h }
+}
 
 export function PlanScreen({
   frame,
@@ -50,7 +61,8 @@ export function PlanScreen({
   onSummary: () => void
 }) {
   const { numbers, finance } = plan
-  const [closeUp, setCloseUp] = useState(false)
+  // Open on a steady close-up of the panels. "Whole roof" zooms out, and the same framing comes back each time.
+  const [closeUp, setCloseUp] = useState(true)
   const panelPts = plan.panels.flatMap((p) => [{ x: p.x, y: p.y }, { x: p.x + p.w, y: p.y + p.h }])
   const canCloseUp = panelPts.length > 0
   const shadows = plan.shadowsAt(hour)
@@ -66,9 +78,9 @@ export function PlanScreen({
       <SatelliteMap
         frame={frame}
         className={MAP_FILL}
-        fit={closeUp && canCloseUp ? fitRectFor(panelPts, 0.7) : fitRectFor(plan.roof.points, 0.1)}
-        fitKey={closeUp ? 'plan-panels' : 'plan-roof'}
-        fitMaxZoom={closeUp ? 21 : undefined}
+        fit={closeUp && canCloseUp ? closeUpRect(panelPts, plan.roof.metersPerUnit) : fitRectFor(plan.roof.points, 0.1)}
+        fitKey={closeUp && canCloseUp ? `plan-panels-${panelPts.length}` : 'plan-roof'}
+        fitMaxZoom={closeUp && canCloseUp ? 21 : undefined}
         ariaLabel="Satellite map of your roof with solar panels and shadows"
         notice={
           <>
@@ -111,7 +123,10 @@ export function PlanScreen({
           </g>
         )}
         <ShadowLayer shadows={shadows} />
-        <PanelLayer panels={plan.panels.filter((p) => p.kept)} />
+        <g className="sc-fade-in">
+          <PanelLayer panels={plan.panels.filter((p) => p.kept)} />
+          <PanelDimension panels={plan.panels.filter((p) => p.kept)} mpu={plan.roof.metersPerUnit} />
+        </g>
         <ObstacleLayer obstacles={plan.obstacles} />
         <NeighbourLayer neighbours={plan.neighbours} roof={plan.roof.points} mpu={plan.roof.metersPerUnit} houseFloors={plan.houseFloors} />
       </SatelliteMap>

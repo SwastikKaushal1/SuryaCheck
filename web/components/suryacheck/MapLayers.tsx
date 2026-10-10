@@ -43,6 +43,70 @@ export function ShadowLayer({ shadows }: { shadows: Point[][] }) {
 }
 
 /** Solar panels as they look on a roof: dark glass, silver frame, cell lines. */
+/**
+ * A 1.7 m person standing beside a 5 m ruler, drawn in the same units as the roof so the size
+ * is honest. Used in the PDF report. `x`,`y` is where the person's feet are. `fs` is label size in map units.
+ */
+export function ScaleReference({ x, y, mpu = GEO_MPU, fs, metres = 5 }: { x: number; y: number; mpu?: number; fs: number; metres?: number }) {
+  const k = 1 / mpu // map units per metre
+  const f = fs * mpu // label size, in metres, inside the scaled group
+  const ink = '#0F5C5E'
+  return (
+    <g pointerEvents="none" transform={`translate(${x} ${y}) scale(${k})`}>
+      <g fill={ink}>
+        <circle cx="0" cy="-1.6" r="0.11" />
+        <rect x="-0.22" y="-1.46" width="0.44" height="0.72" rx="0.14" />
+        <rect x="-0.19" y="-0.78" width="0.16" height="0.78" rx="0.05" />
+        <rect x="0.03" y="-0.78" width="0.16" height="0.78" rx="0.05" />
+      </g>
+      <g stroke={ink} strokeWidth="1.2" fill="none">
+        <line x1="0.5" y1="-1.7" x2="0.5" y2="0" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+        <line x1="0.4" y1="-1.7" x2="0.6" y2="-1.7" vectorEffect="non-scaling-stroke" />
+        <line x1="0.4" y1="0" x2="0.6" y2="0" vectorEffect="non-scaling-stroke" />
+      </g>
+      <text x="0.72" y={-0.85 + f * 0.35} fontSize={f} fontWeight="700" fill={ink}>1.7 m person</text>
+      <g stroke={ink} strokeWidth="1.6" fill="none">
+        <line x1="0" y1={f * 1.6} x2={metres} y2={f * 1.6} vectorEffect="non-scaling-stroke" />
+        <line x1="0" y1={f * 1.6 - f * 0.4} x2="0" y2={f * 1.6 + f * 0.4} vectorEffect="non-scaling-stroke" />
+        <line x1={metres} y1={f * 1.6 - f * 0.4} x2={metres} y2={f * 1.6 + f * 0.4} vectorEffect="non-scaling-stroke" />
+      </g>
+      <text x={metres + 0.25} y={f * 1.6 + f * 0.35} fontSize={f} fontWeight="700" fill={ink}>{metres} m</text>
+    </g>
+  )
+}
+
+/** A dimension line above the panel block saying how big it really is, so people can judge it against the roof. */
+export function PanelDimension({ panels, mpu = GEO_MPU }: { panels: { x: number; y: number; w: number; h: number }[]; mpu?: number }) {
+  const { scale } = useMapView()
+  if (!panels.length) return null
+  const minX = Math.min(...panels.map((p) => p.x))
+  const maxX = Math.max(...panels.map((p) => p.x + p.w))
+  const minY = Math.min(...panels.map((p) => p.y))
+  const maxY = Math.max(...panels.map((p) => p.y + p.h))
+  const wM = ((maxX - minX) * mpu).toFixed(1)
+  const hM = ((maxY - minY) * mpu).toFixed(1)
+  const y = minY - 14 / scale
+  const text = `${panels.length} panels · about ${wM} × ${hM} m`
+  const pillW = (text.length * 6.3 + 18) / scale
+  const ink = '#ffffff'
+  return (
+    <g pointerEvents="none">
+      <g stroke="#000" strokeOpacity="0.55" strokeWidth="3.4" fill="none">
+        <line x1={minX} y1={y} x2={maxX} y2={y} vectorEffect="non-scaling-stroke" />
+      </g>
+      <g stroke={ink} strokeWidth="1.6" fill="none">
+        <line x1={minX} y1={y} x2={maxX} y2={y} vectorEffect="non-scaling-stroke" />
+        <line x1={minX} y1={y - 4 / scale} x2={minX} y2={y + 4 / scale} vectorEffect="non-scaling-stroke" />
+        <line x1={maxX} y1={y - 4 / scale} x2={maxX} y2={y + 4 / scale} vectorEffect="non-scaling-stroke" />
+      </g>
+      <g transform={`translate(${(minX + maxX) / 2} ${y - 13 / scale})`}>
+        <rect x={-pillW / 2} y={-9 / scale} width={pillW} height={18 / scale} rx={9 / scale} fill="#1f2937" opacity="0.9" />
+        <text y={4 / scale} textAnchor="middle" fontSize={11 / scale} fontWeight="700" fill="#fff">{text}</text>
+      </g>
+    </g>
+  )
+}
+
 export function PanelLayer({ panels }: { panels: { x: number; y: number; w: number; h: number; angle?: number }[] }) {
   return (
     <g pointerEvents="none">
@@ -151,15 +215,18 @@ export function ObstacleLayer({ obstacles, labels = false }: { obstacles: Obstac
       </defs>
       {obstacles.map((o) => {
         const preset = presetFor(o.kind)
-        const rise = Math.max(3, (o.heightM / GEO_MPU) * 0.4)
+        const rise = Math.max(3, (o.heightM / GEO_MPU) * 0.25)
         const x0 = o.x - o.w / 2
         const y0 = o.y - o.h / 2
         const fs = 11 / scale
         const clear = o.kind === 'clear'
         const round = isRound(o)
         const name = (o.name?.trim() || preset.short).slice(0, 18)
-        const text = clear ? name : `${name} · ${o.heightM} m`
-        const labelW = Math.max(68, text.length * 6.4 + 18)
+        const wM = +(o.w * GEO_MPU).toFixed(1)
+        const lM = +(o.h * GEO_MPU).toFixed(1)
+        const dims = round ? `${wM} m wide` : `${wM} × ${lM} m`
+        const text = clear ? `${name} · ${dims}` : `${name} · ${o.heightM} m tall · ${dims}`
+        const labelW = Math.max(68, text.length * 6.1 + 18)
         const topY = clear ? y0 : y0 - rise
         return (
           <g key={o.id}>

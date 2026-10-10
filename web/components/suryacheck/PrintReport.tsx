@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { LogoMark } from './AppShell'
-import { ObstacleLayer, PanelLayer } from './MapLayers'
+import { ObstacleLayer, PanelLayer, ScaleReference } from './MapLayers'
 import { inr, kw, lakhRange, num, yearsRange } from '@/lib/format'
 import { polygonBounds, toPoints } from '@/lib/geometry'
 import type { Lang } from '@/lib/i18n'
@@ -153,11 +153,16 @@ const rs = ([a, b]: readonly [number, number]) => (a === b ? inr(a) : `${inr(a)}
 function RoofDrawing({ plan }: { plan: PlanModel }) {
   const b = polygonBounds(plan.roof.points)
   const m = Math.max(b.w, b.h) * 0.1
+  const mpu = plan.roof.metersPerUnit
+  // Room under the roof for a 1.7 m person and a 5 m ruler, drawn at the same scale as the panels.
+  const extra = 1.7 / mpu + m * 0.9
+  const fs = Math.max(b.w, b.h) * 0.026
   return (
-    <svg viewBox={`${b.minX - m} ${b.minY - m} ${b.w + 2 * m} ${b.h + 2 * m}`} className="mx-auto h-auto max-h-[330px] w-full" role="img" aria-label="Roof layout">
+    <svg viewBox={`${b.minX - m} ${b.minY - m} ${b.w + 2 * m} ${b.h + 2 * m + extra}`} className="mx-auto h-auto max-h-[370px] w-full" role="img" aria-label="Roof layout">
       <polygon points={toPoints(plan.roof.points)} fill="#FEF3C7" stroke="#D97706" strokeWidth="2.2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
       <ObstacleLayer obstacles={plan.obstacles} />
       <PanelLayer panels={plan.panels} />
+      <ScaleReference x={b.minX + 0.5 / mpu} y={b.maxY + m + 1.7 / mpu} mpu={mpu} fs={fs} />
     </svg>
   )
 }
