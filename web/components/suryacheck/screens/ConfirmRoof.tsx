@@ -2,21 +2,20 @@ import { AlertTriangle, LoaderCircle, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '../Button'
 import { Card } from '../Card'
-import { CornerHandle, EdgeAdder, RoofOutline } from '../MapLayers'
+import { CornerHandle, EdgeAdder, EdgeLengths, RoofOutline } from '../MapLayers'
 import { DEFAULT_FIT, fitRectFor, SatelliteMap } from '../SatelliteMap'
 import { Tag } from '../Tag'
 import { MAP_FILL, SIDE_PANEL, SPLIT, STICKY_MAP_PANEL } from '../layout'
 import { RoofFallback } from './RoofFallback'
-import { num } from '@/lib/format'
+import { areaInLocalUnits, num } from '@/lib/format'
 import { GEO_MPU, type GeoFrame } from '@/lib/geo'
 import { polygonArea } from '@/lib/geometry'
 import type { Point, RoofData } from '@/lib/mockData'
-import { MAX_ROOF_M2 } from '@/lib/plan'
+import { BIG_ROOF_M2, MAX_ROOF_M2 } from '@/lib/plan'
 
 type Stage = 'ask' | 'adjust' | 'rejected' | 'manual'
 
-/** A typical house roof is 40 to 200 m². Outside this range the outline is probably wrong. */
-const BIG_ROOF_M2 = 260
+/** Smaller than this is probably only part of a roof. */
 const SMALL_ROOF_M2 = 15
 
 export function ConfirmRoof({
@@ -94,6 +93,7 @@ export function ConfirmRoof({
       <div className={STICKY_MAP_PANEL}>
         <SatelliteMap frame={frame} className={MAP_FILL} fit={fitRectFor(detected.points, 0.6)} fitKey="detected" interactive ariaLabel="Satellite map with an amber outline of the roof we found">
           <RoofOutline points={points} />
+          <EdgeLengths points={points} />
           {adjusting &&
             points.map((p, i) => {
               const next = points[(i + 1) % points.length]
@@ -119,6 +119,7 @@ export function ConfirmRoof({
           <div>
             <p className="text-sm font-medium text-ink-soft">Roof area we found</p>
             <p className="text-3xl font-bold text-ink">{num(areaM2)} m²</p>
+            <p className="text-sm text-ink-soft">{areaInLocalUnits(areaM2)}</p>
           </div>
           <Tag kind="estimate" />
         </Card>

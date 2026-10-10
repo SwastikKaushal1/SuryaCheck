@@ -128,7 +128,7 @@ function SectionHead({ eyebrow, title, text }: { eyebrow: string; title: string;
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm font-bold uppercase tracking-wide text-sun-dark">{eyebrow}</p>
-      <h2 className="text-balance text-2xl font-bold text-ink lg:text-3xl">{title}</h2>
+      <h2 className="text-balance text-2xl font-extrabold tracking-tight text-ink lg:text-4xl">{title}</h2>
       {text && <p className="max-w-2xl text-base text-ink-soft lg:text-lg">{text}</p>}
     </div>
   )
@@ -247,6 +247,55 @@ export function Landing({ onPlace }: { onPlace: (place: Place) => void }) {
   const inflight = useRef<AbortController | null>(null)
   useEffect(() => () => inflight.current?.abort(), [])
 
+  // Suggestions while typing: wait for a short pause, then ask the backend (Photon, open source).
+  const [suggestions, setSuggestions] = useState<Place[]>([])
+  const [open, setOpen] = useState(false)
+  const [active, setActive] = useState(-1)
+  useEffect(() => {
+    const q = address.trim()
+    if (q.length < 3) {
+      setSuggestions([])
+      return
+    }
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => {
+      api
+        .suggest(q, ctrl.signal)
+        .then((rows) => {
+          setSuggestions(rows)
+          setActive(-1)
+        })
+        .catch(() => {}) // suggestions are a nicety: the search button still works without them
+    }, 300)
+    return () => {
+      clearTimeout(timer)
+      ctrl.abort()
+    }
+  }, [address])
+  const showSuggestions = open && suggestions.length > 0 && busy === null
+
+  const pick = (p: Place) => {
+    setOpen(false)
+    setAddress(p.address)
+    onPlace(p)
+  }
+
+  const onKeys = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActive((i) => (i + 1) % suggestions.length)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActive((i) => (i <= 0 ? suggestions.length - 1 : i - 1))
+    } else if (e.key === 'Enter' && active >= 0) {
+      e.preventDefault()
+      pick(suggestions[active])
+    } else if (e.key === 'Escape') {
+      setOpen(false)
+    }
+  }
+
   const search = async () => {
     const q = address.trim()
     if (q.length < 2) {
@@ -316,7 +365,7 @@ export function Landing({ onPlace }: { onPlace: (place: Place) => void }) {
               <Sun className="size-4" aria-hidden="true" />
               Free rooftop solar check
             </p>
-            <h1 className="text-balance text-[2rem] font-bold leading-tight text-ink lg:text-5xl lg:leading-[1.1]">Find out what your roof can produce.</h1>
+            <h1 className="text-balance text-[2.25rem] font-extrabold leading-[1.05] tracking-tight text-ink lg:text-6xl lg:leading-[1.02]">Find out what your roof can produce.</h1>
             <p className="text-lg text-ink-soft lg:text-xl">About 3 minutes, no sign-up.</p>
           </div>
 
@@ -330,18 +379,28 @@ export function Landing({ onPlace }: { onPlace: (place: Place) => void }) {
             <label htmlFor="address" className="sr-only">
               Your address
             </label>
+            <div className="relative">
             <div className="flex min-h-14 items-center gap-2 rounded-2xl border-2 border-input bg-white pl-4 pr-1.5 shadow-sm transition focus-within:border-sun-dark focus-within:ring-4 focus-within:ring-sun/30 hover:border-sun-dark/60">
               <Search className="size-5 shrink-0 text-ink-soft" aria-hidden="true" />
               <input
                 id="address"
                 type="text"
-                autoComplete="street-address"
-                placeholder="Type your address"
+                role="combobox"
+                autoComplete="off"
+                placeholder="Type your address, area or PIN code"
                 value={address}
                 onChange={(e) => {
                   setAddress(e.target.value)
+                  setOpen(true)
                   if (error) setError('')
                 }}
+                onFocus={() => setOpen(true)}
+                onBlur={() => setOpen(false)}
+                onKeyDown={onKeys}
+                aria-expanded={showSuggestions}
+                aria-controls="address-suggestions"
+                aria-autocomplete="list"
+                aria-activedescendant={showSuggestions && active >= 0 ? `address-option-${active}` : undefined}
                 aria-describedby={error ? 'address-error' : undefined}
                 aria-invalid={error ? true : undefined}
                 className="h-12 min-w-0 flex-1 bg-transparent text-lg text-ink outline-none placeholder:text-ink-soft/70"
@@ -354,6 +413,37 @@ export function Landing({ onPlace }: { onPlace: (place: Place) => void }) {
               >
                 {busy === 'search' ? <LoaderCircle className="size-6 animate-spin" aria-hidden="true" /> : <ArrowRight className="size-6" aria-hidden="true" />}
               </button>
+            </div>
+            {showSuggestions && (
+              <ul
+                id="address-suggestions"
+                role="listbox"
+                aria-label="Suggested addresses"
+                className="absolute inset-x-0 top-full z-40 mt-2 max-h-80 overflow-auto rounded-2xl bg-white py-1.5 shadow-xl ring-1 ring-amber-900/10"
+              >
+                {suggestions.map((s, i) => (
+                  <li
+                    key={`${s.lat},${s.lng},${i}`}
+                    id={`address-option-${i}`}
+                    role="option"
+                    aria-selected={i === active}
+                    // mousedown, not click: it fires before the input loses focus and closes the list
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      pick(s)
+                    }}
+                    onMouseEnter={() => setActive(i)}
+                    className={`flex cursor-pointer items-start gap-3 px-4 py-2.5 text-left ${i === active ? 'bg-sun-soft' : ''}`}
+                  >
+                    <MapPin className="mt-1 size-4 shrink-0 text-sun-dark" aria-hidden="true" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-base font-semibold text-ink">{s.address.split(', ')[0]}</span>
+                      <span className="block truncate text-sm text-ink-soft">{s.address.split(', ').slice(1).join(', ')}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
             </div>
 
             {error && (
@@ -468,7 +558,7 @@ export function Landing({ onPlace }: { onPlace: (place: Place) => void }) {
       <Reveal as="section" className="scroll-mt-24"><div id="open-data" role="region" className="flex scroll-mt-24 flex-col gap-6 rounded-3xl bg-teal-deep p-6 text-white lg:p-10" aria-label="Our data">
         <div className="flex flex-col gap-2">
           <p className="text-sm font-bold uppercase tracking-wide text-sun">Our data</p>
-          <h2 className="text-balance text-2xl font-bold lg:text-3xl">Built on open data you can check</h2>
+          <h2 className="text-balance text-2xl font-extrabold tracking-tight lg:text-4xl">Built on open data you can check</h2>
           <p className="max-w-2xl text-base text-white/80 lg:text-lg">
             No black box. Every number comes from geometry, sun physics and these public sources.
           </p>

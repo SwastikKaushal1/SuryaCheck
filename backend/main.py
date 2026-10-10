@@ -60,7 +60,7 @@ async def on_upstream(_: Request, exc: geo.UpstreamError):
 # ---------- routes ----------
 @app.get("/")
 def root():
-    return {"ok": True, "routes": ["/geocode", "/reverse", "/quick", "/monthly", "/building", "/yield", "/finance", "/reference", "/docs"]}
+    return {"ok": True, "routes": ["/geocode", "/suggest", "/reverse", "/quick", "/monthly", "/building", "/yield", "/finance", "/reference", "/docs"]}
 
 
 @app.get("/health")
@@ -71,6 +71,13 @@ def health():
 @app.get("/geocode")
 def geocode(q: str = Query(..., min_length=2, max_length=200), country: str = "in"):
     return geo.geocode(q, country=country or None)
+
+
+@app.get("/suggest")
+def suggest(q: str = Query(..., min_length=3, max_length=120),
+            lat: Optional[float] = Query(None, ge=-90, le=90), lon: Optional[float] = Query(None, ge=-180, le=180)):
+    """Address suggestions while the person types (Photon, open source)."""
+    return geo.suggest(q, near=(lat, lon) if lat is not None and lon is not None else None)
 
 
 @app.get("/reverse")

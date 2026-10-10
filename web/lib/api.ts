@@ -137,6 +137,11 @@ export const api = {
     const rows = await request<PlaceRow[]>(`/geocode?q=${encodeURIComponent(q)}`, {}, signal)
     return rows.map(toPlace)
   },
+  /** Suggestions while typing (Photon, open source). Needs at least 3 characters. */
+  async suggest(q: string, signal?: AbortSignal): Promise<Place[]> {
+    const rows = await request<PlaceRow[]>(`/suggest?q=${encodeURIComponent(q)}`, {}, signal)
+    return rows.map(toPlace)
+  },
   async reverse(lat: number, lon: number, signal?: AbortSignal): Promise<Place | null> {
     const r = await request<(PlaceRow & { found: boolean }) | { found: false }>(`/reverse?lat=${lat}&lon=${lon}`, {}, signal)
     return r.found ? toPlace(r as PlaceRow) : null

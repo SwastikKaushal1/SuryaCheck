@@ -2,17 +2,17 @@ import { RotateCcw, Undo2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Button } from '../Button'
 import { Card } from '../Card'
-import { CornerHandle, RoofOutline } from '../MapLayers'
+import { CornerHandle, EdgeLengths, RoofOutline } from '../MapLayers'
 import { NumberField } from '../NumberField'
 import { DEFAULT_FIT, fitRectFor, SatelliteMap } from '../SatelliteMap'
 import { Segmented } from '../Segmented'
 import { Tag } from '../Tag'
 import { MAP_FILL, SIDE_PANEL, SPLIT, STICKY_MAP_PANEL } from '../layout'
-import { num } from '@/lib/format'
+import { areaInLocalUnits, num } from '@/lib/format'
 import { ANCHOR, GEO_MPU, type GeoFrame } from '@/lib/geo'
 import { polygonArea } from '@/lib/geometry'
 import type { Point, RoofData } from '@/lib/mockData'
-import { MAX_ROOF_M2 } from '@/lib/plan'
+import { BIG_ROOF_M2, MAX_ROOF_M2 } from '@/lib/plan'
 
 type Method = 'tap' | 'type'
 
@@ -56,6 +56,7 @@ export function RoofFallback({ frame, reason, onUse }: { frame: GeoFrame; reason
           <>
             <SatelliteMap frame={frame} className={MAP_FILL} fit={DEFAULT_FIT} fitKey="tap" interactive ariaLabel="Satellite map. Tap around the edge of your roof. The shape closes by itself." onTap={(p) => setCorners((c) => [...c, p])}>
               {corners.length >= 3 && <RoofOutline points={corners} />}
+              <EdgeLengths points={corners} closed={corners.length >= 3} />
               {corners.length === 2 && <line x1={corners[0].x} y1={corners[0].y} x2={corners[1].x} y2={corners[1].y} stroke="#FBBF24" strokeWidth="3" vectorEffect="non-scaling-stroke" />}
               {corners.map((c, i) => (
                 <CornerHandle key={i} point={c} label={String(i + 1)} ariaLabel={`Roof corner ${i + 1}. Drag to move.`} onMove={(p) => setCorners((list) => list.map((q, k) => (k === i ? p : q)))} />
@@ -69,6 +70,7 @@ export function RoofFallback({ frame, reason, onUse }: { frame: GeoFrame; reason
           typed && (
             <SatelliteMap frame={frame} className={MAP_FILL} fit={fitRectFor(typed.points, 0.5)} fitKey={`type-${length}-${width}`} ariaLabel="Satellite map showing the roof size you typed, centred on your pin">
               <RoofOutline points={typed.points} />
+              <EdgeLengths points={typed.points} />
             </SatelliteMap>
           )
         )}
@@ -111,9 +113,16 @@ export function RoofFallback({ frame, reason, onUse }: { frame: GeoFrame; reason
           <div>
             <p className="text-sm font-medium text-ink-soft">Roof area</p>
             <p className="text-3xl font-bold text-ink">{picked ? `${num(picked.areaM2)} m²` : '—'}</p>
+            {picked && <p className="text-sm text-ink-soft">{areaInLocalUnits(picked.areaM2)}</p>}
           </div>
           <Tag kind="input" />
         </Card>
+        {!tooBig && picked && picked.areaM2 > BIG_ROOF_M2 && (
+          <p className="rounded-xl bg-sun-soft p-3 text-sm font-medium text-ink" role="status">
+            That is bigger than most house roofs (40 to 150 m², about 50 to 180 gaj). Check the side lengths on the map
+            match your house, and drag any corner that is off.
+          </p>
+        )}
         {tooBig && (
           <p className="text-base font-medium text-red-800" role="alert">
             That is too big for one house. We can plan roofs up to {num(MAX_ROOF_M2)} m².

@@ -24,6 +24,48 @@ export function RoofOutline({ points, fillOpacity = 0.28, dashed = false }: { po
   )
 }
 
+/**
+ * The length of every side of an outline, in metres, so a wrong outline is easy to spot
+ * ("my house is not 33 m wide"). Sides too short on screen to label are skipped.
+ */
+export function EdgeLengths({ points, mpu = GEO_MPU, closed = true }: { points: Point[]; mpu?: number; closed?: boolean }) {
+  const { scale } = useMapView()
+  if (points.length < 2) return null
+  const cx = points.reduce((s, p) => s + p.x, 0) / points.length
+  const cy = points.reduce((s, p) => s + p.y, 0) / points.length
+  const edges = (closed && points.length > 2 ? points : points.slice(0, -1)).map((a, i) => {
+    const b = points[(i + 1) % points.length]
+    return { a, b, len: Math.hypot(b.x - a.x, b.y - a.y) }
+  })
+  return (
+    <g pointerEvents="none">
+      {edges.map(({ a, b, len }, i) => {
+        if (len * scale < 46) return null
+        const mx = (a.x + b.x) / 2
+        const my = (a.y + b.y) / 2
+        // Nudge the label outwards, away from the middle of the shape, so it sits beside the edge.
+        let nx = -(b.y - a.y) / len
+        let ny = (b.x - a.x) / len
+        if ((mx - cx) * nx + (my - cy) * ny < 0) {
+          nx = -nx
+          ny = -ny
+        }
+        const off = points.length > 2 ? 14 / scale : 0
+        const text = `${(len * mpu).toFixed(1)} m`
+        const w = (text.length * 6.6 + 12) / scale
+        return (
+          <g key={i} transform={`translate(${mx + nx * off} ${my + ny * off})`}>
+            <rect x={-w / 2} y={-9 / scale} width={w} height={18 / scale} rx={9 / scale} fill="#1f2937" opacity="0.88" />
+            <text y={4 / scale} textAnchor="middle" fontSize={11 / scale} fontWeight="700" fill="#fff">
+              {text}
+            </text>
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
 /** Soft shadows cast by tanks, rooms and tall neighbours. */
 export function ShadowLayer({ shadows }: { shadows: Point[][] }) {
   return (

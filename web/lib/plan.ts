@@ -16,6 +16,8 @@ export const DEFAULT_PANEL: PanelSpec = { widthM: 1.13, lengthM: 2.28, gapM: 0.0
 /** Tilts offered on the plan screen; also requested from POST /yield. */
 export const TILTS = [5, 10, 15, 20, 25, 30, 35]
 const CLEARANCE_M = 0.3
+/** Most house roofs are 40-150 m² (roughly 50-180 gaj). Past this we ask the person to check the outline. */
+export const BIG_ROOF_M2 = 260
 /** Largest roof we plan. Past this the outline is surely not one house, and packing it would freeze the page. */
 export const MAX_ROOF_M2 = 3000
 

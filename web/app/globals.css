@@ -5,6 +5,7 @@
 
 @theme inline {
   --font-sans: var(--font-hind), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-hind), ui-sans-serif, system-ui, sans-serif;
 
   --color-ring: var(--ring);
   --color-input: var(--input);

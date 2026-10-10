@@ -113,7 +113,6 @@ export function PlanScreen({
         className={MAP_FILL}
         fit={closeUp && canCloseUp ? closeUpRect(panelPts, plan.roof.metersPerUnit) : fitRectFor(plan.roof.points, 0.1)}
         fitKey={closeUp && canCloseUp ? `plan-panels-${panelPts.length}` : 'plan-roof'}
-        fitMaxZoom={closeUp && canCloseUp ? 21 : undefined}
         ariaLabel="Satellite map of your roof with solar panels and shadows"
         notice={
           <>

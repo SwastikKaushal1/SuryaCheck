@@ -118,6 +118,64 @@ def geocode(q, limit=5, country="in"):
     return cache[key]
 
 
+# Photon (open source, OpenStreetMap data) allows search-as-you-type; Nominatim's usage policy does not.
+PHOTON = "https://photon.komoot.io/api/"
+INDIA_BBOX = "68.1,6.5,97.4,35.7"  # min lon, min lat, max lon, max lat
+STATE_CODES = {
+    "andaman and nicobar islands": "AN", "andhra pradesh": "AP", "arunachal pradesh": "AR", "assam": "AS",
+    "bihar": "BR", "chandigarh": "CH", "chhattisgarh": "CT", "delhi": "DL", "national capital territory of delhi": "DL",
+    "goa": "GA", "gujarat": "GJ", "haryana": "HR", "himachal pradesh": "HP", "jammu and kashmir": "JK",
+    "jharkhand": "JH", "karnataka": "KA", "kerala": "KL", "ladakh": "LA", "lakshadweep": "LD",
+    "madhya pradesh": "MP", "maharashtra": "MH", "manipur": "MN", "meghalaya": "ML", "mizoram": "MZ",
+    "nagaland": "NL", "odisha": "OR", "puducherry": "PY", "punjab": "PB", "rajasthan": "RJ", "sikkim": "SK",
+    "tamil nadu": "TN", "telangana": "TG", "tripura": "TR", "uttar pradesh": "UP", "uttarakhand": "UT",
+    "west bengal": "WB",
+}
+
+
+def _photon_place(f):
+    """Shape one Photon feature like a geocode row."""
+    p = f.get("properties") or {}
+    lon, lat = (f.get("geometry") or {}).get("coordinates", [None, None])[:2]
+    street = " ".join(x for x in [p.get("housenumber"), p.get("street")] if x)
+    parts = [p.get("name"), street, p.get("district") or p.get("locality"), p.get("city") or p.get("county"),
+             p.get("state"), p.get("postcode")]
+    seen, name = set(), []
+    for x in parts:
+        if x and x.lower() not in seen:
+            seen.add(x.lower())
+            name.append(x)
+    return {
+        "name": ", ".join(name),
+        "lat": float(lat),
+        "lon": float(lon),
+        "state": p.get("state", ""),
+        "stateCode": STATE_CODES.get((p.get("state") or "").lower(), ""),
+        "city": p.get("city") or p.get("district") or p.get("county") or "",
+    }
+
+
+def suggest(q, limit=6, near=None):
+    """Address suggestions while typing, limited to India. `near` (lat, lon) ranks closer places first."""
+    key = f"SUG#{q.strip().lower()}#{near and (round(near[0], 1), round(near[1], 1))}"
+    if key not in cache:
+        p = {"q": q, "limit": limit, "lang": "en", "bbox": INDIA_BBOX}
+        if near:
+            p["lat"], p["lon"] = near
+        req = urllib.request.Request(f"{PHOTON}?{urllib.parse.urlencode(p)}", headers={"User-Agent": UA})
+        data = _open(req, "Photon", timeout=8, tries=1)
+        feats = data.get("features", []) if isinstance(data, dict) else []
+        rows = [_photon_place(f) for f in feats
+                if (f.get("properties") or {}).get("countrycode", "").upper() == "IN" and f.get("geometry")]
+        out, names = [], set()
+        for r in rows:  # Photon often returns the same street several times
+            if r["name"] and r["name"] not in names:
+                names.add(r["name"])
+                out.append(r)
+        cache[key] = out
+    return cache[key]
+
+
 def reverse(lat, lon):
     """Coordinates -> address, for the 'use my location' button."""
     key = f"REV#{round(lat, 4)}#{round(lon, 4)}"

@@ -266,7 +266,7 @@ export function AppShell({
   const total = DESKTOP_STEPS.length
   return (
     <div className="flex min-h-dvh justify-center bg-sand lg:block lg:bg-cream">
-      <div className={cn('flex min-h-dvh w-full flex-col bg-cream sm:shadow-2xl lg:max-w-none lg:shadow-none', landing ? 'max-w-none' : 'max-w-[430px]')}>
+      <div className={cn('flex min-h-dvh w-full flex-col bg-cream sm:shadow-2xl lg:max-w-none lg:shadow-none', landing ? 'max-w-none font-display' : 'max-w-[430px]')}>
         {landing ? (
           <LandingNav />
         ) : (
