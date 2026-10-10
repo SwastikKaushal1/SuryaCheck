@@ -6,11 +6,11 @@ import { api, isAbort, toApiError, type Place } from '@/lib/api'
 import { toPoints } from '@/lib/geometry'
 import { sampleRoof } from '@/lib/mockData'
 
-const FEATURES = [
-  { icon: Home, title: 'Roof-aware', text: 'We outline your roof and place panels around tanks, rooms and trees.' },
-  { icon: Zap, title: 'Sized to your bill', text: 'Only as many panels as you will use, not as many as fit.' },
-  { icon: IndianRupee, title: 'Subsidy included', text: 'PM Surya Ghar subsidy is worked out for you, not left as homework.' },
-  { icon: Building2, title: 'Shade counted', text: 'Mark taller buildings next door and we count the shade they cast.' },
+const FEATURES: { icon: typeof Home; title: string; text: string; fact?: string; count?: number }[] = [
+  { icon: Home, title: 'Roof-aware', text: 'We outline your roof and place panels around tanks, rooms and trees.', fact: 'Panels drawn to scale' },
+  { icon: Zap, title: 'Sized to your bill', text: 'Only as many panels as you will use, not as many as fit.', fact: 'Fits your bill, not your roof' },
+  { icon: IndianRupee, title: 'Subsidy included', text: 'PM Surya Ghar subsidy is worked out for you, not left as homework.', count: 78000 },
+  { icon: Building2, title: 'Shade counted', text: 'Mark taller buildings next door and we count the shade they cast.', fact: 'Checked across 3 seasons' },
 ]
 
 const STEPS = [
@@ -26,6 +26,103 @@ const DATA = [
   { name: 'Esri World Imagery', use: 'Satellite pictures of your roof' },
   { name: 'PM Surya Ghar rules', use: 'Central subsidy: ₹30,000 per kW for 2 kW, ₹18,000 for the 3rd' },
 ]
+
+/** Counts up to `to` once it scrolls into view. */
+function CountUp({ to, prefix = '' }: { to: number; prefix?: string }) {
+  const ref = useRef<HTMLSpanElement | null>(null)
+  const [n, setN] = useState(0)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (reduce || typeof IntersectionObserver === 'undefined') {
+      setN(to)
+      return
+    }
+    let raf = 0
+    const io = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return
+      io.disconnect()
+      const t0 = performance.now()
+      const tick = (t: number) => {
+        const k = Math.min(1, (t - t0) / 1400)
+        setN(Math.round(to * (1 - Math.pow(1 - k, 3))))
+        if (k < 1) raf = requestAnimationFrame(tick)
+      }
+      raf = requestAnimationFrame(tick)
+    }, { threshold: 0.4 })
+    io.observe(el)
+    return () => {
+      io.disconnect()
+      cancelAnimationFrame(raf)
+    }
+  }, [to])
+  return <span ref={ref}>{prefix}{n.toLocaleString('en-IN')}</span>
+}
+
+/** A tiny looping picture for each "How it works" step. */
+function StepScene({ i }: { i: number }) {
+  const common = 'hs h-full w-full'
+  if (i === 0)
+    return (
+      <svg viewBox="0 0 200 90" className={common} aria-hidden="true">
+        {[0, 1, 2, 3].map((r) => [0, 1, 2, 3, 4, 5].map((c) => <rect key={`${r}-${c}`} x={14 + c * 30} y={8 + r * 20} width="26" height="16" rx="3" fill="#e9dcc4" />))}
+        <rect x="74" y="28" width="56" height="36" rx="3" fill="#f6c46a" stroke="#d97706" strokeWidth="2" />
+        <ellipse className="hs-ripple" cx="102" cy="52" rx="10" ry="4" fill="none" stroke="#0f5c5e" strokeWidth="2" />
+        <g className="hs-pin">
+          <path d="M102 54 C95 46 92 42 92 37 A10 10 0 0 1 112 37 C112 42 109 46 102 54 Z" fill="#0f5c5e" />
+          <circle cx="102" cy="37" r="3.5" fill="#fff" />
+        </g>
+      </svg>
+    )
+  if (i === 1)
+    return (
+      <svg viewBox="0 0 200 90" className={common} aria-hidden="true">
+        <rect x="30" y="10" width="140" height="62" rx="3" fill="#fef3c7" stroke="#d97706" strokeWidth="2" />
+        <g className="hs-pop">
+          <circle cx="62" cy="34" r="11" fill="#4f9bbf" />
+          <circle cx="62" cy="31" r="11" fill="#9ad3ee" stroke="#fff" strokeWidth="1.5" />
+        </g>
+        <g className="hs-pop" style={{ animationDelay: '.25s' }}>
+          <rect x="110" y="22" width="44" height="30" rx="2" fill="#a8998a" stroke="#fff" strokeWidth="1.5" />
+          <rect x="128" y="40" width="8" height="12" fill="#3b2f25" />
+        </g>
+        <g className="hs-measure">
+          <line x1="110" y1="62" x2="154" y2="62" stroke="#0f5c5e" strokeWidth="2" />
+          <line x1="110" y1="58" x2="110" y2="66" stroke="#0f5c5e" strokeWidth="2" />
+          <line x1="154" y1="58" x2="154" y2="66" stroke="#0f5c5e" strokeWidth="2" />
+        </g>
+        <text className="hs-label" x="132" y="84" textAnchor="middle" fontSize="11" fontWeight="700" fill="#0f5c5e">2.9 m</text>
+      </svg>
+    )
+  if (i === 2)
+    return (
+      <svg viewBox="0 0 200 90" className={common} aria-hidden="true">
+        <g className="hs-sun">
+          <circle cx="100" cy="16" r="9" fill="#f59e0b" />
+          <circle cx="100" cy="16" r="14" fill="#f59e0b" opacity=".25" />
+        </g>
+        {[0, 1, 2, 3, 4, 5].map((k) => (
+          <g key={k} transform={`translate(${46 + (k % 3) * 37} ${k < 3 ? 38 : 62})`}>
+            <rect className="hs-cell" style={{ animationDelay: `${k * 0.15}s` }} width="32" height="20" rx="2" fill="#94a3b8" stroke="#dbeafe" strokeWidth="1.2" />
+          </g>
+        ))}
+      </svg>
+    )
+  return (
+    <svg viewBox="0 0 200 90" className={common} aria-hidden="true">
+      <rect x="62" y="8" width="58" height="74" rx="5" fill="#fff" stroke="#d6c7ad" strokeWidth="2" />
+      <rect x="70" y="16" width="28" height="7" rx="2" fill="#0f5c5e" />
+      {[0, 1, 2, 3, 4].map((k) => (
+        <rect key={k} className="hs-line" style={{ animationDelay: `${k * 0.18}s` }} x="70" y={32 + k * 9} width={k % 2 ? 30 : 42} height="4" rx="2" fill="#e7d9bf" />
+      ))}
+      <g className="hs-plane">
+        <path d="M120 54 L146 44 L136 62 L132 55 Z" fill="#f59e0b" />
+        <path d="M132 55 L146 44" stroke="#b45309" strokeWidth="1" />
+      </g>
+    </svg>
+  )
+}
 
 function SectionHead({ eyebrow, title, text }: { eyebrow: string; title: string; text?: string }) {
   return (
@@ -309,16 +406,24 @@ export function Landing({ onPlace }: { onPlace: (place: Place) => void }) {
           <SectionHead eyebrow="How it works" title="Four steps, about three minutes" />
         </Reveal>
         <Reveal className="relative">
-          <span aria-hidden="true" className="step-line absolute left-[12%] right-[12%] top-[38px] hidden h-0.5 rounded bg-gradient-to-r from-sun via-sun-dark to-teal-deep lg:block" />
+          <div aria-hidden="true" className="absolute left-[12%] right-[12%] top-[68px] hidden lg:block">
+            <span className="step-line block h-0.5 rounded bg-gradient-to-r from-sun via-sun-dark to-teal-deep" />
+            <span className="step-dot absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-sun shadow-[0_0_0_4px_rgba(245,158,11,0.25)]" />
+          </div>
           <ol className="relative grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {STEPS.map(({ icon: Icon, title, text }, i) => (
-              <Reveal as="li" key={title} delay={i * 120} className="group flex flex-col gap-3 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-amber-900/5 transition duration-300 hover:-translate-y-1 hover:shadow-lg">
-                <div className="flex items-center gap-3">
-                  <span className="flex size-9 items-center justify-center rounded-full bg-sun text-base font-extrabold text-ink shadow-[0_0_0_6px_#fff]">{i + 1}</span>
-                  <Icon className="icon-bob size-5 text-teal-deep" aria-hidden="true" />
+              <Reveal as="li" key={title} delay={i * 120} className="group">
+                <div className="step-glow flex h-full flex-col gap-3 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-amber-900/5 transition duration-300 hover:shadow-lg" style={{ animationDelay: `${i * 2}s` }}>
+                  <div className="h-24 overflow-hidden rounded-xl bg-gradient-to-br from-sun-soft/70 to-sand/70">
+                    <StepScene i={i} />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-9 items-center justify-center rounded-full bg-sun text-base font-extrabold text-ink">{i + 1}</span>
+                    <Icon className="icon-bob size-5 text-teal-deep" aria-hidden="true" />
+                  </div>
+                  <p className="text-lg font-bold text-ink">{title}</p>
+                  <p className="text-base text-ink-soft">{text}</p>
                 </div>
-                <p className="text-lg font-bold text-ink">{title}</p>
-                <p className="text-base text-ink-soft">{text}</p>
               </Reveal>
             ))}
           </ol>
@@ -330,20 +435,31 @@ export function Landing({ onPlace }: { onPlace: (place: Place) => void }) {
           <SectionHead eyebrow="What you get" title="A plan you can check, not a sales pitch" />
         </Reveal>
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {FEATURES.map(({ icon: Icon, title, text }, i) => (
+          {FEATURES.map(({ icon: Icon, title, text, fact, count }, i) => (
             <Reveal
               as="li"
               key={title}
               delay={i * 110}
-              className="group flex items-start gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-amber-900/5 transition duration-300 hover:-translate-y-1 hover:shadow-lg hover:ring-sun/40"
+              className="shine group flex flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-amber-900/5 transition duration-300 hover:-translate-y-1 hover:shadow-lg hover:ring-sun/40"
             >
-              <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-teal-soft text-teal-deep transition-colors duration-300 group-hover:bg-sun group-hover:text-ink">
-                <Icon className="icon-bob size-5" aria-hidden="true" />
-              </span>
-              <div>
-                <p className="text-lg font-bold text-ink">{title}</p>
-                <p className="text-base text-ink-soft">{text}</p>
+              <div className="flex items-start gap-4">
+                <span className="float-icon flex size-11 shrink-0 items-center justify-center rounded-full bg-teal-soft text-teal-deep transition-colors duration-300 group-hover:bg-sun group-hover:text-ink" style={{ animationDelay: `${i * 0.5}s` }}>
+                  <Icon className="icon-bob size-5" aria-hidden="true" />
+                </span>
+                <div>
+                  <p className="text-lg font-bold text-ink">{title}</p>
+                  <p className="text-base text-ink-soft">{text}</p>
+                </div>
               </div>
+              <p className="mt-auto w-fit rounded-full bg-sun-soft px-3 py-1 text-sm font-bold text-sun-dark">
+                {count ? (
+                  <>
+                    Up to <CountUp to={count} prefix="₹" />
+                  </>
+                ) : (
+                  fact
+                )}
+              </p>
             </Reveal>
           ))}
         </ul>

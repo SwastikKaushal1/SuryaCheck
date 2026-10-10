@@ -9,7 +9,7 @@ import { SkylineFlow } from './screens/SkylineFlow'
 import { LangToggle, Summary } from './screens/Summary'
 import { WhereYouLive } from './screens/WhereYouLive'
 import { api, type Place } from '@/lib/api'
-import { financeFromApi } from '@/lib/finance'
+import { financeFromApi, loanPlan } from '@/lib/finance'
 import { GEO_MPU, lngLatToUnits, simplifyRing, type GeoFrame } from '@/lib/geo'
 import { polygonArea } from '@/lib/geometry'
 import type { Lang } from '@/lib/i18n'
@@ -24,7 +24,7 @@ import {
   type SkylineStop,
 } from '@/lib/mockData'
 import { buildPlanModel, DEFAULT_PANEL, TILTS, type SkylineLoss, type UserInputs } from '@/lib/plan'
-import { FALLBACK_REFERENCE, financeParamsFrom, tariffFor } from '@/lib/reference'
+import { FALLBACK_REFERENCE, financeParamsFrom, loanTermsFrom, tariffFor } from '@/lib/reference'
 import { horizonFromStops, skylineLossPct } from '@/lib/solar'
 import { withoutNeighbours } from '@/lib/neighbours'
 import { useAsync } from '@/lib/useAsync'
@@ -268,6 +268,17 @@ export default function App() {
 
   const sunStatus = clearYields.status === 'ready' && skyYields.status === 'loading' ? 'loading' : clearYields.status
 
+  // Month-by-month shape for the chart, at the tilt the plan chose. Optional: the plan works without it.
+  const planTilt = localPlan?.tilt ?? 0
+  const monthlyCall = useAsync(
+    committed && localPlan && (screen === 'plan' || screen === 'summary')
+      ? (signal) => api.monthly(committed.lat, committed.lng, planTilt, signal)
+      : null,
+    [commitKey, planTilt, screen === 'plan' || screen === 'summary'],
+  )
+  const loan = useMemo(() => (plan ? loanPlan(plan.finance, loanTermsFrom(ref)) : null), [plan, ref])
+  const useKwhMonth = inputs.billValue > 0 ? (inputs.billMode === 'units' ? inputs.billValue : inputs.billValue / tariff) : null
+
   const go = (next: Screen) => setScreen(next)
 
   /** A new address: everything tied to the old house is dropped. */
@@ -314,6 +325,9 @@ export default function App() {
     go('plan')
   }
 
+  // Only the summary (and its PDF / WhatsApp text) is translated, so the toggle lives there alone.
+  const langToggle = view === 'summary' ? <LangToggle lang={lang} onChange={setLang} /> : undefined
+
   const startScan = () => {
     setScanSession((s) => s + 1)
     go('skyline')
@@ -326,7 +340,7 @@ export default function App() {
       onHome={screen === 'landing' ? undefined : () => go('landing')}
       desktopStep={DESKTOP_STEP[view]}
       onDesktopStep={goToDesktopStep}
-      langToggle={<LangToggle lang={lang} onChange={setLang} />}
+      langToggle={langToggle}
     >
       {screen === 'landing' && <Landing onPlace={choosePlace} />}
 
@@ -389,7 +403,12 @@ export default function App() {
           roofType={roofType}
           onRoofType={setRoofType}
           obstacles={obstacles}
-          onAddObstacle={(o) => setObstacles((list) => [...list, { ...o, id: `ob-new-${nextId.current++}` }])}
+          onAddObstacle={(o) => {
+            const id = `ob-new-${nextId.current++}`
+            setObstacles((list) => [...list, { ...o, id }])
+            return id
+          }}
+          onUpdateObstacle={(id, patch) => setObstacles((list) => list.map((o) => (o.id === id ? { ...o, ...patch } : o)))}
           onRemoveObstacle={(id) => setObstacles((list) => list.filter((o) => o.id !== id))}
           neighbours={neighbours}
           onAddNeighbour={(side) => setNeighbours((list) => [...list, { id: `nb-${nextId.current++}`, side, floors: 3 }])}
@@ -416,6 +435,9 @@ export default function App() {
           ownHouse={inputs.ownHouse}
           residential={inputs.residential}
           subsidyRules={financeParamsFrom(ref, place.stateCode).subsidy}
+          loan={loan}
+          monthlyShape={monthlyCall.data?.monthly ?? null}
+          useKwhMonth={useKwhMonth}
           onScan={startScan}
           onSummary={() => go('summary')}
         />
@@ -432,7 +454,7 @@ export default function App() {
         />
       )}
 
-      {screen === 'summary' && plan && <Summary plan={plan} lang={lang} placeName={place.address} />}
+      {screen === 'summary' && plan && <Summary plan={plan} loan={loan} lang={lang} placeName={place.address} />}
     </AppShell>
   )
 }

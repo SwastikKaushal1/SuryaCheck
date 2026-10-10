@@ -1,10 +1,10 @@
-import { ArrowRight, Minus, Plus, Trash2 } from 'lucide-react'
+import { ArrowRight, Check, Minus, Plus, RotateCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '../Button'
 import { Card, SectionTitle } from '../Card'
 import { NumberField } from '../NumberField'
 import { fitRectFor, SatelliteMap } from '../SatelliteMap'
-import { NeighbourLayer, ObstacleLayer, RoofOutline, ShadowLayer } from '../MapLayers'
+import { DrawLayer, NeighbourLayer, ObstacleEditor, ObstacleLayer, neighbourRisePx, obstacleRise, RoofOutline, ShadowLayer, type EditItem } from '../MapLayers'
 import { Segmented } from '../Segmented'
 import { MAP_FILL, SIDE_PANEL, SPLIT, STICKY_MAP_PANEL } from '../layout'
 import type { GeoFrame } from '@/lib/geo'
@@ -59,6 +59,29 @@ function Chip({
   )
 }
 
+/** Turn control: a slider plus quarter steps, for people who would rather not use the map handle. */
+function TurnRow({ angle, onChange }: { angle: number; onChange: (deg: number) => void }) {
+  const a = Math.round(angle) % 360
+  const step = (d: number) => onChange((((a + d) % 360) + 360) % 360)
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+          <RotateCw className="size-4" aria-hidden="true" />
+          Turn
+        </span>
+        <span className="text-sm font-bold text-ink">{a}°</span>
+      </div>
+      <input type="range" min={0} max={359} step={1} value={a} onChange={(e) => onChange(Number(e.target.value))} aria-label="Turn in degrees" className="h-8 w-full accent-[#0F5C5E]" />
+      <div className="grid grid-cols-3 gap-2">
+        <Chip active={false} onClick={() => step(-15)} label="Turn 15 degrees left">−15°</Chip>
+        <Chip active={a === 0} onClick={() => onChange(0)} label="Straight">Straight</Chip>
+        <Chip active={false} onClick={() => step(15)} label="Turn 15 degrees right">+15°</Chip>
+      </div>
+    </div>
+  )
+}
+
 export function RoofObstacles({
   frame,
   roof,
@@ -66,6 +89,7 @@ export function RoofObstacles({
   onRoofType,
   obstacles,
   onAddObstacle,
+  onUpdateObstacle,
   onRemoveObstacle,
   neighbours,
   onAddNeighbour,
@@ -80,7 +104,8 @@ export function RoofObstacles({
   roofType: RoofType
   onRoofType: (type: RoofType) => void
   obstacles: Obstacle[]
-  onAddObstacle: (obstacle: Omit<Obstacle, 'id'>) => void
+  onAddObstacle: (obstacle: Omit<Obstacle, 'id'>) => string
+  onUpdateObstacle: (id: string, patch: Partial<Obstacle>) => void
   onRemoveObstacle: (id: string) => void
   neighbours: Neighbour[]
   onAddNeighbour: (side: Neighbour['side']) => void
@@ -99,6 +124,7 @@ export function RoofObstacles({
   const [name, setName] = useState('')
   const [hint, setHint] = useState('')
   const [when, setWhen] = useState<9 | 12 | 15>(15)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const pickKind = (k: ObstacleKind) => {
     const p = presetFor(k)
@@ -111,26 +137,30 @@ export function RoofObstacles({
     setHint('')
   }
 
-  const dropObstacle = (p: Point) => {
-    if (!pointInPolygon(p, roof.points)) {
-      setHint('Tap inside the amber roof outline.')
+  /** A tap drops an item at its usual size; dragging on the map draws it at the size you pulled out. */
+  const dropObstacle = (p: Point, drawn?: { x: number; y: number; w: number; h: number }) => {
+    const at = drawn ?? p
+    if (!pointInPolygon(at, roof.points)) {
+      setHint('Place it inside the amber roof outline.')
       return
     }
     setHint('')
     const preset = presetFor(kind)
-    const wM = clampNum(widthStr, preset.widthM, 0.2, 30)
-    const lM = shape === 'round' ? wM : clampNum(lengthStr, preset.lengthM, 0.2, 30)
+    const fromMap = (units: number) => Math.min(30, Math.max(0.2, units * roof.metersPerUnit))
+    const wM = drawn ? fromMap(drawn.w) : clampNum(widthStr, preset.widthM, 0.2, 30)
+    const lM = shape === 'round' ? wM : drawn ? fromMap(drawn.h) : clampNum(lengthStr, preset.lengthM, 0.2, 30)
     const heightM = kind === 'clear' ? 0 : clampNum(heightStr, preset.heightM, 0, 30)
-    onAddObstacle({
+    const id = onAddObstacle({
       kind,
       shape,
       name: name.trim() || undefined,
-      x: p.x,
-      y: p.y,
+      x: at.x,
+      y: at.y,
       w: wM / roof.metersPerUnit,
       h: lM / roof.metersPerUnit,
       heightM,
     })
+    setSelectedId(id)
   }
 
   const freeSides = SIDES.filter((s) => !neighbours.some((n) => n.side === s))
@@ -143,28 +173,51 @@ export function RoofObstacles({
     ...neighbours.map((n) => shadowHull(neighbourBlock(n, roof.points, mpu, houseFloors), sun, mpu, 40)),
   ]
   const fit = fitRectFor([...roof.points, ...neighbourPoints(neighbours, roof.points, mpu, houseFloors)], 0.35)
-  const moveNeighbour = (id: string, rect: NonNullable<Neighbour['rect']>) => onUpdateNeighbour(id, { rect })
+  const blockOf = (n: Neighbour) => neighbourBlock(n, roof.points, mpu, houseFloors)
+  const editItems: EditItem[] = [
+    ...(flat
+      ? obstacles.map((o) => ({ id: o.id, x: o.x, y: o.y, w: o.w, h: o.h, angle: o.angle, round: isRound(o), lift: { units: obstacleRise(o), px: 0 }, keepOnRoof: true }))
+      : []),
+    ...neighbours.map((n) => {
+      const b = blockOf(n)
+      return { id: n.id, x: b.x, y: b.y, w: b.w, h: b.h, angle: b.angle, lift: { units: 0, px: neighbourRisePx(n.floors) } }
+    }),
+  ]
+  const editItem = (id: string, patch: { x: number; y: number; w: number; h: number; angle: number }) => {
+    if (obstacles.some((o) => o.id === id)) onUpdateObstacle(id, patch)
+    else onUpdateNeighbour(id, { rect: patch })
+  }
+  const selOb = obstacles.find((o) => o.id === selectedId)
+  const editor = (
+    <ObstacleEditor items={editItems} selectedId={selectedId} onSelect={setSelectedId} onChange={editItem} roof={roof.points} minUnits={0.2 / mpu} maxUnits={40 / mpu} />
+  )
 
   return (
     <div className={SPLIT}>
       <div className={STICKY_MAP_PANEL}>
         {flat ? (
           <>
-            <SatelliteMap frame={frame} className={MAP_FILL} fit={fit} fitKey={`roof-${neighbours.length}`} ariaLabel="Satellite map of your roof. Tap to place the selected item." onTap={dropObstacle}>
+            <SatelliteMap frame={frame} className={MAP_FILL} fit={fit} fitKey={`roof-${neighbours.length}`} ariaLabel="Satellite map of your roof. Tap or drag on the roof to place the selected item.">
               <RoofOutline points={roof.points} />
+              <DrawLayer round={shape === 'round'} mpu={mpu} onDraw={(r) => dropObstacle({ x: r.x, y: r.y }, r)} onTap={(p) => dropObstacle(p)} />
               <ShadowLayer shadows={shadows} />
               <ObstacleLayer obstacles={obstacles} labels />
-              <NeighbourLayer neighbours={neighbours} roof={roof.points} mpu={mpu} houseFloors={houseFloors} onChange={moveNeighbour} />
+              <NeighbourLayer neighbours={neighbours} roof={roof.points} mpu={mpu} houseFloors={houseFloors} />
+              {editor}
             </SatelliteMap>
             <p className="text-base font-medium text-ink" aria-live="polite">
-              {hint || (kind === 'clear' ? 'Tap the roof to mark a keep-clear zone.' : `Tap the roof to place ${name.trim() ? name.trim() : `a ${presetFor(kind).label.toLowerCase()}`}.`)}
+              {hint ||
+                (selectedId
+                  ? 'Drag it to move. Square handles resize it, the round handle on top turns it. Tap Done when finished.'
+                  : `Drag on the roof to draw ${name.trim() ? name.trim() : `a ${presetFor(kind).label.toLowerCase()}`}, or just tap to drop one. Tap an item to move, resize or turn it.`)}
             </p>
           </>
         ) : (
           <SatelliteMap frame={frame} className={MAP_FILL} fit={fit} fitKey={`roof-${neighbours.length}`} ariaLabel="Satellite map of your roof">
             <RoofOutline points={roof.points} />
             <ShadowLayer shadows={shadows} />
-            <NeighbourLayer neighbours={neighbours} roof={roof.points} mpu={mpu} houseFloors={houseFloors} onChange={moveNeighbour} />
+            <NeighbourLayer neighbours={neighbours} roof={roof.points} mpu={mpu} houseFloors={houseFloors} />
+            {editor}
           </SatelliteMap>
         )}
       </div>
@@ -300,6 +353,43 @@ export function RoofObstacles({
             </div>
           </Card>
 
+          {selOb && (
+            <Card className="flex flex-col gap-4 ring-2 ring-teal-deep/40">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-base font-bold text-ink">Editing: {selOb.name?.trim() || presetFor(selOb.kind).label}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onRemoveObstacle(selOb.id)
+                    setSelectedId(null)
+                  }}
+                  aria-label="Delete this item"
+                  className="flex size-12 items-center justify-center rounded-full text-red-800 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-200"
+                >
+                  <Trash2 className="size-5" aria-hidden="true" />
+                </button>
+              </div>
+              <p className="text-sm text-ink-soft">Drag the item on the map to move it, pull a square corner to resize it, or use the round handle to turn it.</p>
+              <TurnRow angle={selOb.angle ?? 0} onChange={(deg) => onUpdateObstacle(selOb.id, { angle: deg })} />
+              {selOb.kind !== 'clear' && (
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm font-semibold text-ink">How tall is it?</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {HEIGHT_CHOICES.map((h) => (
+                      <Chip key={h} active={selOb.heightM === h} onClick={() => onUpdateObstacle(selOb.id, { heightM: h })}>
+                        {h} m
+                      </Chip>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <Button variant="secondary" onClick={() => setSelectedId(null)}>
+                <Check className="size-5" aria-hidden="true" />
+                Done
+              </Button>
+            </Card>
+          )}
+
           <section aria-label="Items on your roof" className="flex flex-col gap-2">
             <SectionTitle>On your roof ({obstacles.length})</SectionTitle>
             {obstacles.length === 0 ? (
@@ -311,20 +401,20 @@ export function RoofObstacles({
                   return (
                     <li
                       key={o.id}
-                      className="flex min-h-14 items-center gap-3 rounded-2xl bg-white px-4 py-2 shadow-sm ring-1 ring-amber-900/5"
+                      className={cn('flex min-h-14 items-center gap-3 rounded-2xl bg-white px-4 py-2 shadow-sm ring-1 ring-amber-900/5', o.id === selectedId && 'ring-2 ring-teal-deep')}
                     >
                       <span
                         className="size-4 shrink-0 rounded-sm"
                         style={{ backgroundColor: preset.color }}
                         aria-hidden="true"
                       />
-                      <span className="flex-1 text-base font-semibold text-ink">
+                      <button type="button" onClick={() => setSelectedId(o.id === selectedId ? null : o.id)} aria-pressed={o.id === selectedId} className="flex-1 rounded-lg text-left text-base font-semibold text-ink focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sun/40">
                         {o.name?.trim() || preset.label}
                         <span className="font-normal text-ink-soft">
                           {o.kind === 'clear' ? ' · keep clear' : ` · ${o.heightM} m`}
                           {` · ${isRound(o) ? `${+(o.w * mpu).toFixed(1)} m wide` : `${+(o.w * mpu).toFixed(1)} × ${+(o.h * mpu).toFixed(1)} m`}`}
                         </span>
-                      </span>
+                      </button>
                       <button
                         type="button"
                         onClick={() => onRemoveObstacle(o.id)}
@@ -352,7 +442,7 @@ export function RoofObstacles({
       <section aria-label="Tall neighbours" className="flex flex-col gap-2">
         <SectionTitle>Tall neighbours (optional)</SectionTitle>
         <p className="text-sm text-ink-soft">
-          Tall buildings next door can shade your roof. Drag the green building on the map to where it really stands, and drag its round corner to match its size.
+          Tall buildings next door can shade your roof. Tap the green building on the map, then drag it to where it really stands, pull a square corner to match its size, and use the round handle to turn it.
         </p>
         {!flat && neighbours.length > 0 && (
           <Segmented<'9' | '12' | '15'>
@@ -380,7 +470,7 @@ export function RoofObstacles({
         </div>
         <ul className="flex flex-col gap-2">
           {neighbours.map((n) => (
-            <li key={n.id} className="flex flex-col gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-amber-900/5">
+            <li key={n.id} className={cn('flex flex-col gap-3 rounded-2xl bg-white p-3 shadow-sm ring-1 ring-amber-900/5', n.id === selectedId && 'ring-2 ring-teal-deep')}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex gap-1.5" role="group" aria-label="Which side of your house">
                   {SIDES.map((s) => {
@@ -440,6 +530,13 @@ export function RoofObstacles({
                   </button>
                 </div>
               </div>
+              <TurnRow
+                angle={blockOf(n).angle ?? 0}
+                onChange={(deg) => {
+                  const b = blockOf(n)
+                  onUpdateNeighbour(n.id, { rect: { x: b.x, y: b.y, w: b.w, h: b.h, angle: deg } })
+                }}
+              />
             </li>
           ))}
         </ul>

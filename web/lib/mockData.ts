@@ -51,6 +51,8 @@ export interface Obstacle {
   shape?: 'box' | 'round'
   /** Optional name the person gave it, shown on the map. */
   name?: string
+  /** Turn in degrees, clockwise, around its centre. 0 when not turned. */
+  angle?: number
 }
 
 export interface Neighbour {
@@ -59,7 +61,7 @@ export interface Neighbour {
   side: 'N' | 'E' | 'S' | 'W'
   floors: number
   /** Exact place and size (map units, centre-based) once the person has moved or resized it. */
-  rect?: { x: number; y: number; w: number; h: number }
+  rect?: { x: number; y: number; w: number; h: number; angle?: number }
 }
 
 export interface TiltRow {
@@ -81,8 +83,9 @@ export interface FinanceParams {
     perKwFirstTwo: number
     thirdKw: number
     cap: number
-    /** Extra subsidy some states add on top of the central one. */
-    stateTopUp: number
+    /** Extra subsidy some states add on top of the central one: per kW, up to a cap (Delhi: 10,000 up to 30,000). */
+    statePerKw: number
+    stateCap: number
   }
 }
 

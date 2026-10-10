@@ -48,8 +48,9 @@ def horizon_hash(h):
     return "0" if not h else hashlib.md5(",".join(f"{x:.1f}" for x in h).encode()).hexdigest()[:8]
 
 
-def pvgis_yield(lat, lon, tilt, aspect=0, horizon=None):
-    key = f"PVGIS#{round(lat, 2)}#{round(lon, 2)}#{tilt}#{aspect}#{horizon_hash(horizon)}"
+def _pvgis(lat, lon, tilt, aspect=0, horizon=None):
+    """One PVGIS call per spot/tilt: {"y": kWh per kWp per year, "m": 12 monthly values or None}."""
+    key = f"PVGIS2#{round(lat, 2)}#{round(lon, 2)}#{tilt}#{aspect}#{horizon_hash(horizon)}"
     if key not in cache:
         p = {"lat": lat, "lon": lon, "peakpower": 1, "loss": 14,
              "angle": tilt, "aspect": aspect, "outputformat": "json"}
@@ -60,10 +61,28 @@ def pvgis_yield(lat, lon, tilt, aspect=0, horizon=None):
         req = urllib.request.Request(f"{PVGIS}?{urllib.parse.urlencode(p)}", headers={"User-Agent": UA})
         data = _open(req, "PVGIS")
         try:
-            cache[key] = round(data["outputs"]["totals"]["fixed"]["E_y"], 1)
+            total = round(data["outputs"]["totals"]["fixed"]["E_y"], 1)
         except (KeyError, TypeError):
             raise UpstreamError("PVGIS", "unexpected response")
+        try:
+            rows = sorted(data["outputs"]["monthly"]["fixed"], key=lambda r: r["month"])
+            monthly = [round(r["E_m"], 1) for r in rows] if len(rows) == 12 else None
+        except (KeyError, TypeError):
+            monthly = None
+        cache[key] = {"y": total, "m": monthly}
     return cache[key]
+
+
+def pvgis_yield(lat, lon, tilt, aspect=0, horizon=None):
+    return _pvgis(lat, lon, tilt, aspect, horizon)["y"]
+
+
+def pvgis_monthly(lat, lon, tilt, aspect=0):
+    """Twelve monthly kWh per kWp, January first. Shares the cache with pvgis_yield."""
+    m = _pvgis(lat, lon, tilt, aspect)["m"]
+    if m is None:
+        raise UpstreamError("PVGIS", "no monthly figures")
+    return m
 
 
 def pvgis_many(lat, lon, tilts, aspect=0, horizon=None):

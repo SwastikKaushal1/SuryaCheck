@@ -17,6 +17,8 @@ const dictionary = {
     perYear: 'a year',
     neighbourNote: 'Tall neighbour',
     installerQs: 'Questions to ask installers',
+    emi: 'Loan EMI per month',
+    monthlySaving: 'Bill saving per month',
   },
   hi: {
     planTitle: 'आपकी सोलर योजना',
@@ -34,6 +36,8 @@ const dictionary = {
     perYear: 'सालाना',
     neighbourNote: 'ऊंची पड़ोसी इमारत',
     installerQs: 'इंस्टॉलर से पूछने के सवाल',
+    emi: 'लोन की मासिक EMI',
+    monthlySaving: 'हर महीने बिल में बचत',
   },
 } as const
 

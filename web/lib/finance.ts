@@ -1,4 +1,4 @@
-import type { FinanceResponse } from './api'
+import type { FinanceResponse, LoanTerms } from './api'
 import type { FinanceParams, Range } from './mockData'
 
 export interface FinanceResult {
@@ -21,6 +21,9 @@ export function subsidyFor(kW: number, rules: FinanceParams['subsidy']): number 
   const third = Math.max(0, Math.min(kW, 3) - 2) * rules.thirdKw
   return Math.min(rules.cap, first + third)
 }
+
+/** State subsidy on top of the central one, e.g. Delhi: 10,000/kW up to 30,000. Same as backend state_top_up. */
+export const stateTopUpFor = (kW: number, rules: FinanceParams['subsidy']) => Math.min(kW * rules.statePerKw, rules.stateCap)
 
 /** Whole years, never zero, low < high. Shared by the local and server paths so both round alike. */
 function paybackYears(raw: Range | null): Range {
@@ -47,7 +50,7 @@ export function calcFinance(
   const extra = Math.max(0, kWp - 1)
   const lo = Math.round(first * params.firstKwRange[0] + extra * params.extraKwRange[0])
   const hi = Math.round(first * params.firstKwRange[1] + extra * params.extraKwRange[1])
-  const subsidy = eligible ? Math.round(subsidyFor(kWp, params.subsidy) + params.subsidy.stateTopUp) : 0
+  const subsidy = eligible ? Math.round(subsidyFor(kWp, params.subsidy) + stateTopUpFor(kWp, params.subsidy)) : 0
   const netCostRange: Range = [Math.max(0, lo - subsidy), Math.max(0, hi - subsidy)]
 
   const offset = consumptionKwhYear && consumptionKwhYear > 0 ? Math.min(kWhYear, consumptionKwhYear) : kWhYear
@@ -69,6 +72,48 @@ export function calcFinance(
     co2Tonnes: Math.round(Math.round(offset * params.co2KgPerKwh) / 100) / 10,
     notes,
     source: 'local',
+  }
+}
+
+/** Fixed monthly instalment for a loan (standard reducing-balance EMI). */
+export function emiFor(principal: number, ratePct: number, years: number): number {
+  if (principal <= 0) return 0
+  const n = years * 12
+  const r = ratePct / 100 / 12
+  if (r === 0) return principal / n
+  const f = (1 + r) ** n
+  return (principal * r * f) / (f - 1)
+}
+
+export interface LoanPlan {
+  /** Borrowed amount, low to high: the cost after subsidy, up to the scheme's limit. */
+  loanRange: Range
+  /** Paid in cash up front when the cost after subsidy is more than the loan limit. */
+  upfrontRange: Range
+  emiRange: Range
+  monthlySavings: number
+  /** True when the EMI is no more than the monthly saving, even at the high cost. */
+  paysFromDayOne: boolean
+  terms: LoanTerms
+}
+
+/** EMI next to monthly savings, assuming the subsidy is used to pay down the loan. */
+export function loanPlan(finance: FinanceResult, terms: LoanTerms): LoanPlan | null {
+  const [netLo, netHi] = finance.netCostRange
+  if (netHi <= 0) return null
+  const loanRange: Range = [Math.min(netLo, terms.maxAmount), Math.min(netHi, terms.maxAmount)]
+  const emiRange: Range = [
+    Math.round(emiFor(loanRange[0], terms.ratePct, terms.years)),
+    Math.round(emiFor(loanRange[1], terms.ratePct, terms.years)),
+  ]
+  const monthlySavings = Math.round(finance.savingsYearRange[0] / 12)
+  return {
+    loanRange,
+    upfrontRange: [netLo - loanRange[0], netHi - loanRange[1]],
+    emiRange,
+    monthlySavings,
+    paysFromDayOne: monthlySavings > 0 && emiRange[1] <= monthlySavings,
+    terms,
   }
 }
 
