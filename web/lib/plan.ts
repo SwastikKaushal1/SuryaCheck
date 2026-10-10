@@ -3,7 +3,7 @@ import { clamp, convexOverlap, pointInPolygon, polygonBounds, polygonCentroid, r
 import type { FinanceParams, Neighbour, Obstacle, Point, RoofData } from './mockData'
 import { neighbourBlock } from './neighbours'
 import { castsShadow, obstacleFootprint } from './obstacles'
-import { seasonsFor, shadowHull, sunPosition } from './solar'
+import { DAY_HOURS, seasonsFor, shadowHull, sunPosition } from './solar'
 
 /** Panel size and power. Live values come from GET /reference. */
 export interface PanelSpec {
@@ -131,31 +131,36 @@ export function buildPlanModel(args: PlanArgs): PlanModel {
     ...obstacles.filter(castsShadow).map((o) => shadowHull(o, sun, mpu)),
     ...blocks.map((o) => shadowHull(o, sun, mpu, 40)),
   ]
+  // Sun from real sunrise to real sunset on three days of the year, every half hour.
+  // Each moment counts by how much sunlight energy it carries (low morning sun counts less).
   const samples: { weight: number; hulls: Point[][] }[] = []
   for (const season of seasons) {
-    for (let h = 7; h <= 17; h += 0.5) {
+    for (const h of DAY_HOURS) {
       const sun = sunPosition(season, h)
       if (sun.elevation <= 1) continue
       samples.push({ weight: Math.sin(rad(sun.elevation)), hulls: hullsAt(sun) })
     }
   }
   const totalWeight = samples.reduce((s, x) => s + x.weight, 0) || 1
-  const southness = (y: number) => clamp((y - bounds.minY) / (bounds.h || 1), 0, 1)
 
+  /** Share of the year's sunlight that reaches this spot (1 = never shaded by anything marked). */
   function shade(p: Point): number {
     let lit = 0
     for (const s of samples) if (!s.hulls.some((hull) => pointInPolygon(p, hull))) lit += s.weight
-    const v = lit / totalWeight
-    return clamp(v, 0, 1)
+    return clamp(lit / totalWeight, 0, 1)
   }
-  const score = (p: Point) => clamp(shade(p) * (1 - lossFrac * (0.45 + 0.9 * southness(p.y))), 0, 1)
+  // The skyline shades the whole roof alike, so it scales every spot by the same amount.
+  const score = (p: Point) => clamp(shade(p) * (1 - lossFrac), 0, 1)
 
+  // Heat squares only where a panel could go: not on top of tanks, rooms and other solid items.
+  const solid = obstacles.filter(castsShadow).map(obstacleFootprint)
   const heatCells: HeatCell[] = []
   const pitch = 14
   for (let y = bounds.minY; y < bounds.maxY; y += pitch)
     for (let x = bounds.minX; x < bounds.maxX; x += pitch) {
       const c = { x: x + pitch / 2, y: y + pitch / 2 }
-      if (pointInPolygon(c, roof.points)) heatCells.push({ x, y, w: pitch, h: pitch, score: score(c) })
+      if (pointInPolygon(c, roof.points) && !solid.some((f) => pointInPolygon(c, f)))
+        heatCells.push({ x, y, w: pitch, h: pitch, score: score(c) })
     }
 
   const usable = scalePolygon(roof.points, polygonCentroid(roof.points), 0.93)

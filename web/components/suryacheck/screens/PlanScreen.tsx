@@ -136,7 +136,7 @@ export function PlanScreen({
             )}
             {heatmap && (
               <div className="pointer-events-none absolute bottom-7 right-2 z-[600] flex flex-col gap-1 rounded-xl bg-white/95 px-3 py-2 text-xs font-semibold text-ink shadow-md">
-                <span className="h-2 w-32 rounded-full" style={{ background: `linear-gradient(90deg, ${scoreColor(0.05)}, ${scoreColor(0.5)}, ${scoreColor(0.95)})` }} />
+                <span className="h-2 w-32 rounded-full" style={{ background: `linear-gradient(90deg, ${scoreColor(0)}, ${scoreColor(0.885)}, ${scoreColor(1)})` }} />
                 <span className="flex justify-between">
                   <span>Less sun</span>
                   <span>More sun</span>

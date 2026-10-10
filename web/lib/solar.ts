@@ -2,40 +2,49 @@ import { clamp, convexHull } from './geometry'
 import type { Obstacle, Point, SkylineStop } from './mockData'
 import { obstacleFootprint } from './obstacles'
 
+/** A day that stands for a season: the winter solstice, an equinox, or the summer solstice. */
 export interface Season {
   name: 'winter' | 'equinox' | 'summer'
+  /** Sun's declination that day, in degrees (-23.44 in December, 0 in March/September, +23.44 in June). */
+  decl: number
+  /** Latitude of the house, degrees north. */
+  lat: number
+  /** Noon sun height that day, degrees. */
   peak: number
-  azFrom: number
-  azTo: number
 }
-
-export const WINTER: Season = { name: 'winter', peak: 38, azFrom: 115, azTo: 245 }
-export const SEASONS: Season[] = [
-  WINTER,
-  { name: 'equinox', peak: 61, azFrom: 90, azTo: 270 },
-  { name: 'summer', peak: 85, azFrom: 65, azTo: 295 },
-]
 
 const rad = (deg: number) => (deg * Math.PI) / 180
+const deg = (r: number) => (r * 180) / Math.PI
+const DECLINATION = { winter: -23.44, equinox: 0, summer: 23.44 } as const
+/** Latitude used when none is known (Delhi). */
+const DEFAULT_LAT = 28.6
 
-/** Noon sun heights at winter solstice / equinox / summer solstice for a latitude (Delhi gives ~38/61/85). */
+/** The three days we simulate, for a latitude (Delhi gives noon sun heights of about 38°, 61° and 85°). */
 export function seasonsFor(lat: number): Season[] {
-  const eq = 90 - Math.abs(lat)
-  const c = (v: number) => clamp(v, 5, 90)
-  return [
-    { ...WINTER, peak: c(eq - 23.44) },
-    { ...SEASONS[1], peak: c(eq) },
-    { ...SEASONS[2], peak: c(eq + 23.44) },
-  ]
+  return (['winter', 'equinox', 'summer'] as const).map((name) => {
+    const decl = DECLINATION[name]
+    return { name, decl, lat, peak: clamp(90 - Math.abs(lat - decl), 0, 90) }
+  })
 }
 
-/** Toy sun path for Delhi: good enough to move shadows around in a prototype. */
+export const SEASONS: Season[] = seasonsFor(DEFAULT_LAT)
+export const WINTER: Season = SEASONS[0]
+
+/** Half-hour steps covering the longest day anywhere in India; times when the sun is down are skipped by callers. */
+export const DAY_HOURS: number[] = Array.from({ length: 30 }, (_, i) => 4.5 + i * 0.5)
+
+/**
+ * Where the sun is, from the standard solar-position equations (hour angle and declination).
+ * `hour` is local solar time (12 = sun due south). Azimuth is degrees clockwise from north.
+ * Elevation is negative while the sun is below the horizon.
+ */
 export function sunPosition(season: Season, hour: number) {
-  const t = clamp((hour - 7) / 10, 0, 1)
-  return {
-    azimuth: season.azFrom + (season.azTo - season.azFrom) * t,
-    elevation: season.peak * Math.sin(Math.PI * t),
-  }
+  const H = rad(15 * (hour - 12))
+  const phi = rad(season.lat)
+  const d = rad(season.decl)
+  const elevation = deg(Math.asin(Math.sin(phi) * Math.sin(d) + Math.cos(phi) * Math.cos(d) * Math.cos(H)))
+  const azimuth = (deg(Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(phi) - Math.tan(d) * Math.cos(phi))) + 180 + 360) % 360
+  return { azimuth, elevation }
 }
 
 export function shadowHull(
@@ -65,7 +74,7 @@ function rawSkylineLoss(horizon: number[]): number {
   let blocked = 0
   let total = 0
   for (const season of SEASONS) {
-    for (let h = 7; h <= 17; h += 0.5) {
+    for (const h of DAY_HOURS) {
       const sun = sunPosition(season, h)
       if (sun.elevation <= 0) continue
       const weight = Math.sin(rad(sun.elevation))
@@ -140,9 +149,14 @@ export function tallestDirection(horizon: number[]): string {
   return compassName(best * 10)
 }
 
-/** Red (little sun) to green (lots of sun). */
+/** Share of the year's sun below which a spot is shown fully red. Installers avoid spots that lose 20%+. */
+export const HEAT_RED_BELOW = 0.8
+/** Share of the year's sun at or above which a spot is shown fully green (practically unshaded). */
+export const HEAT_GREEN_FROM = 0.97
+
+/** Red (loses 20%+ of its sun) through yellow to green (practically no shade). */
 export function scoreColor(score: number, alpha = 0.62): string {
-  const s = clamp((score - 0.5) / 0.5, 0, 1)
+  const s = clamp((score - HEAT_RED_BELOW) / (HEAT_GREEN_FROM - HEAT_RED_BELOW), 0, 1)
   return `hsl(${Math.round(s * 125)} 78% 44% / ${alpha})`
 }
 

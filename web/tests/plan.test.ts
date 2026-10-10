@@ -147,4 +147,23 @@ ok(Math.abs(months.reduce((a, b) => a + b, 0) - 5280) < 1e-6 && months[4] > mont
 import { formatHour } from '../lib/solar'
 ok(formatHour(13.5) === '1:30 pm' && formatHour(7) === '7:00 am' && formatHour(11.99) === '12:00 pm', `formatHour (${formatHour(13.5)}, ${formatHour(11.99)})`)
 
+
+// sun position follows the real solar equations (Delhi), not a fixed 7 am - 5 pm day
+import { seasonsFor as sf, sunPosition as sp, scoreColor as sc } from '../lib/solar'
+const [win, eqx, sum] = sf(28.6)
+ok(Math.abs(sp(win, 12).elevation - 38) < 1 && Math.abs(sp(sum, 12).elevation - 85) < 1, 'noon sun: 38° in winter, 85° in summer')
+ok(Math.abs(sp(sum, 7).elevation - 24) < 1.5 && sp(sum, 6).elevation > 8, `summer 7 am sun is ~24° up, not on the horizon (${sp(sum, 7).elevation.toFixed(0)}°)`)
+ok(sp(win, 6).elevation < 0 && Math.abs(sp(eqx, 18).elevation) < 1, 'sun is down before winter sunrise and sets at 6 pm on the equinox')
+ok(Math.abs(sp(win, 9).azimuth - 135) < 2 && Math.abs(sp(win, 12).azimuth - 180) < 0.5, 'winter morning sun in the south-east, noon sun due south')
+
+// heatmap: honest colours, nothing drawn on top of solid items
+const hueOf = (s: number) => Number(sc(s).match(/hsl\((\d+)/)![1])
+ok(hueOf(1) > 110 && hueOf(0.7) === 0 && hueOf(0.88) < 70, 'a spot losing 30% of its sun is red; only near-unshaded spots are green')
+const room = { id: 'room', kind: 'stairs' as const, x: 200, y: 150, w: 46, h: 77, heightM: 3 }
+const withRoom = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(385), obstacles: [room] })
+const roomShape = obstacleFootprint(room)
+ok(!withRoom.heatCells.some((c) => pointInPolygon({ x: c.x + c.w / 2, y: c.y + c.h / 2 }, roomShape)), 'no heat square is drawn on top of the room')
+const near = (dx: number, dy: number) => withRoom.heatCells.reduce((b, c) => (Math.hypot(c.x + c.w / 2 - (200 + dx), c.y + c.h / 2 - (150 + dy)) < Math.hypot(b.x + b.w / 2 - (200 + dx), b.y + b.h / 2 - (150 + dy)) ? c : b))
+ok(near(0, -60).score < near(0, 60).score && near(0, 60).score > 0.97, `north of the room gets less sun than south (${near(0, -60).score.toFixed(2)} vs ${near(0, 60).score.toFixed(2)})`)
+
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED'); process.exit(fails ? 1 : 0)
