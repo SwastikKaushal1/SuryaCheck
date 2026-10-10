@@ -5,7 +5,7 @@ import { Card, SectionTitle } from '../../Card'
 import { NumberField } from '../../NumberField'
 import { Tag } from '../../Tag'
 import { clamp } from '@/lib/geometry'
-import type { SkylineStop } from '@/lib/mockData'
+import type { Neighbour, SkylineStop } from '@/lib/mockData'
 import { horizonAt, horizonFromStops, skylineLossPct, tallestDirection } from '@/lib/solar'
 import { cn } from '@/lib/utils'
 
@@ -25,18 +25,31 @@ const PRESETS: { label: string; hint: string; heights: Record<number, number> }[
   { label: 'Tall buildings close by', hint: 'A crowded lane or apartment blocks', heights: { 90: 32, 135: 28, 180: 22, 225: 28, 270: 32 } },
 ]
 
+const SIDE_WORDS: Record<Neighbour['side'], string> = { N: 'north', E: 'east', S: 'south', W: 'west' }
+/** ['E', 'W'] -> "east and west side" */
+const listSides = (sides: Neighbour['side'][]) => {
+  const words = sides.map((s) => SIDE_WORDS[s])
+  const joined = words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}` : words[0]
+  return `${joined} side${words.length > 1 ? 's' : ''}`
+}
+
 const xOf = (bearing: number) => LEFT + ((bearing - 90) / 180) * (RIGHT - LEFT)
 const yOf = (elev: number) => BOTTOM - (elev / MAX_ELEV) * (BOTTOM - TOP)
 
 export function SkylineResult({
   stops,
   baseHorizon,
+  adjustHorizon,
+  neighbourSides = [],
   onChange,
   onReset,
   onApply,
 }: {
   stops: SkylineStop[]
   baseHorizon: number[]
+  /** Drops the parts of the skyline already counted as tall neighbours. */
+  adjustHorizon?: (horizon: number[]) => number[]
+  neighbourSides?: Neighbour['side'][]
   onChange: (stops: SkylineStop[]) => void
   onReset: () => void
   onApply: () => void
@@ -47,8 +60,10 @@ export function SkylineResult({
 
   const sorted = [...stops].sort((a, b) => a.bearing - b.bearing)
   const horizon = horizonFromStops(baseHorizon, stops)
-  const lossPct = skylineLossPct(horizon)
-  const direction = tallestDirection(horizon)
+  // The loss we show is the one the plan will use, after leaving out neighbours already counted.
+  const counted = adjustHorizon ? adjustHorizon(horizon) : horizon
+  const lossPct = skylineLossPct(counted)
+  const direction = tallestDirection(counted)
   const selected = stops.find((s) => s.id === selectedId) ?? sorted[0]
 
   const path = (() => {
@@ -101,6 +116,13 @@ export function SkylineResult({
         <p className="text-base text-ink-soft">
           Tall buildings and trees block low morning and evening sun. Pick what is closest to your street, then drag the dots to fine-tune.
         </p>
+        {neighbourSides.length > 0 && (
+          <p className="mt-2 rounded-xl bg-teal-soft p-3 text-sm text-teal-deep">
+            {neighbourSides.length > 1
+              ? `You already added tall neighbours on the ${listSides(neighbourSides)}. Their shadows are already in your plan, so anything in those directions no taller than them is not counted again here.`
+              : `You already added a tall neighbour on the ${listSides(neighbourSides)}. Its shadow is already in your plan, so anything in that direction no taller than it is not counted again here.`}
+          </p>
+        )}
       </div>
 
       <Card className="flex flex-col gap-2 p-3 lg:sticky lg:top-[5.5rem] lg:p-5">

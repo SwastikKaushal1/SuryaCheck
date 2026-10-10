@@ -16,6 +16,8 @@ export const DEFAULT_PANEL: PanelSpec = { widthM: 1.13, lengthM: 2.28, gapM: 0.0
 /** Tilts offered on the plan screen; also requested from POST /yield. */
 export const TILTS = [5, 10, 15, 20, 25, 30, 35]
 const CLEARANCE_M = 0.3
+/** Largest roof we plan. Past this the outline is surely not one house, and packing it would freeze the page. */
+export const MAX_ROOF_M2 = 3000
 
 export interface UserInputs {
   billMode: 'rupees' | 'units'
@@ -107,7 +109,10 @@ export function roofAngle(points: Point[]): number {
 }
 
 export function buildPlanModel(args: PlanArgs): PlanModel {
-  const { roof, obstacles, neighbours, houseFloors = 0, flush, latitude, panel, yields, fallbackYield, skyline, consumptionKwhYear } = args
+  const { roof, neighbours, houseFloors = 0, flush, latitude, panel, yields, fallbackYield, skyline, consumptionKwhYear } = args
+  // Sloped and sheet roofs are used as they are: the obstacles screen hides tanks and rooms for them,
+  // so any marked while the roof was set to flat must not block panels or cast shadows here.
+  const obstacles = flush ? [] : args.obstacles
   const mpu = roof.metersPerUnit
   const bounds = polygonBounds(roof.points)
   const lossFrac = (skyline?.lossPct ?? 0) / 100
@@ -267,7 +272,10 @@ export function buildPlanModel(args: PlanArgs): PlanModel {
     let chosen: Cell[] = ordered
     let limitedBy: PlanNumbers['limitedBy'] = 'roof'
     if (need !== null) {
-      for (let n = 1; n <= fit; n++) {
+      // No panel makes more than the best one, so fewer than need / best can never be enough. Start there.
+      const bestKwh = scored.reduce((m, c) => Math.max(m, c.finalKwh), 0)
+      const start = bestKwh > 0 ? Math.max(1, Math.ceil(need / bestKwh)) : fit + 1
+      for (let n = start; n <= fit; n++) {
         const list = block(n)
         if (energy(list) >= need) {
           chosen = list
@@ -321,7 +329,7 @@ export function buildPlanModel(args: PlanArgs): PlanModel {
     heatCells,
     panels,
     numbers: row.numbers,
-    finance: calcFinance(row.numbers.kWp, row.numbers.kWhFinal, args.eligible, args.financeParams),
+    finance: calcFinance(row.numbers.kWp, row.numbers.kWhFinal, need, args.eligible, args.financeParams),
     flush,
     shadowsAt: (hour) => {
       const sun = sunPosition(seasons[0], hour)

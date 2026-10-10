@@ -12,6 +12,7 @@ import { num } from '@/lib/format'
 import { ANCHOR, GEO_MPU, type GeoFrame } from '@/lib/geo'
 import { polygonArea } from '@/lib/geometry'
 import type { Point, RoofData } from '@/lib/mockData'
+import { MAX_ROOF_M2 } from '@/lib/plan'
 
 type Method = 'tap' | 'type'
 
@@ -44,7 +45,9 @@ export function RoofFallback({ frame, reason, onUse }: { frame: GeoFrame; reason
       source: 'typed',
     }
   }, [length, width])
-  const result = method === 'tap' ? tapped : typed
+  const picked = method === 'tap' ? tapped : typed
+  const tooBig = !!picked && picked.areaM2 > MAX_ROOF_M2
+  const result = tooBig ? null : picked
 
   return (
     <div className={SPLIT}>
@@ -101,10 +104,15 @@ export function RoofFallback({ frame, reason, onUse }: { frame: GeoFrame; reason
         <Card className="flex items-center justify-between gap-3 bg-sun-soft">
           <div>
             <p className="text-sm font-medium text-ink-soft">Roof area</p>
-            <p className="text-3xl font-bold text-ink">{result ? `${num(result.areaM2)} m²` : '—'}</p>
+            <p className="text-3xl font-bold text-ink">{picked ? `${num(picked.areaM2)} m²` : '—'}</p>
           </div>
           <Tag kind="input" />
         </Card>
+        {tooBig && (
+          <p className="text-base font-medium text-red-800" role="alert">
+            That is too big for one house. We can plan roofs up to {num(MAX_ROOF_M2)} m².
+          </p>
+        )}
         <Button disabled={!result} onClick={() => result && onUse(result)}>Use this roof</Button>
       </div>
     </div>

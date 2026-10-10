@@ -11,6 +11,7 @@ import { num } from '@/lib/format'
 import { GEO_MPU, type GeoFrame } from '@/lib/geo'
 import { polygonArea } from '@/lib/geometry'
 import type { Point, RoofData } from '@/lib/mockData'
+import { MAX_ROOF_M2 } from '@/lib/plan'
 
 type Stage = 'ask' | 'adjust' | 'rejected' | 'manual'
 
@@ -122,7 +123,14 @@ export function ConfirmRoof({
           <Tag kind="estimate" />
         </Card>
 
-        {areaM2 > BIG_ROOF_M2 && (
+        {areaM2 > MAX_ROOF_M2 ? (
+          <Card className="flex items-start gap-3 bg-red-50 text-red-900 ring-1 ring-red-200" role="alert">
+            <AlertTriangle className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
+            <p className="text-base font-medium">
+              This outline is far too big for one house ({num(MAX_ROOF_M2)} m² is the most we can plan). Tap &quot;Adjust corners&quot; and trace only your own roof, or tap &quot;Not my house&quot;.
+            </p>
+          </Card>
+        ) : areaM2 > BIG_ROOF_M2 && (
           <Card className="flex items-start gap-3 bg-red-50 text-red-900 ring-1 ring-red-200" role="alert">
             <AlertTriangle className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
             <p className="text-base font-medium">
@@ -141,14 +149,14 @@ export function ConfirmRoof({
 
         {adjusting ? (
           <div className="flex flex-col gap-3">
-            <Button onClick={() => onConfirm({ ...detected, points, areaM2 })}>Save corners</Button>
+            <Button disabled={areaM2 > MAX_ROOF_M2} onClick={() => onConfirm({ ...detected, points, areaM2 })}>Save corners</Button>
             <Button variant="ghost" onClick={() => { setDraft(null); setStage('ask') }}>
               Cancel
             </Button>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            <Button onClick={() => onConfirm({ ...detected, areaM2 })}>Yes, that&apos;s my roof</Button>
+            <Button disabled={areaM2 > MAX_ROOF_M2} onClick={() => onConfirm({ ...detected, areaM2 })}>Yes, that&apos;s my roof</Button>
             <Button variant="secondary" onClick={() => setStage('adjust')}>Adjust corners</Button>
             <Button variant="danger" onClick={() => setStage('rejected')}>Not my house</Button>
           </div>

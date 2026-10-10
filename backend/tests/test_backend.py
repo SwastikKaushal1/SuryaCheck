@@ -41,4 +41,10 @@ f = c.post('/finance', json={'kwp':3,'stateCode':'DL','monthlyBill':3000,'kwhPer
 ok(f['subsidy']==78000 and f['paybackRange'], f'finance ok: payback {f["paybackRange"]}')
 e = c.get('/reverse', params={'lat':'x','lon':1}); ok(e.status_code==422 and 'hint' in e.json(), 'bad input -> {error,hint}')
 ok(c.get('/').json()['routes'].count('/reverse')==1, 'root lists /reverse')
+real_reverse = geo.reverse
+def boom(*a): raise RuntimeError('boom')
+geo.reverse = boom
+e = c.get('/reverse', params={'lat':28.6,'lon':77.3}, headers={'Origin':'http://localhost:3000'})
+ok(e.status_code==500 and e.json()['error']=='server_error' and e.headers.get('access-control-allow-origin')=='*', 'crash -> 500 {error,hint} with CORS header')
+geo.reverse = real_reverse
 print('ALL PASSED' if not fails else f'{fails} FAILED'); sys.exit(fails>0)

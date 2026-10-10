@@ -88,4 +88,27 @@ const tallBox = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(6
 const lowBox = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(6000), obstacles: [{ ...boxObj, heightM: 0.5 }] })
 ok(tallBox.numbers.kWhFinal < lowBox.numbers.kWhFinal, 'a taller custom item never helps yield')
 
+// sloped / sheet roofs ignore tanks marked while the roof was set to flat
+const flushTank = buildPlanModel({ ...base, roof: big, flush: true, consumptionKwhYear: units(6000), obstacles: [{ ...boxObj, heightM: 4 }] })
+ok(flushTank.numbers.panelsFit === flush.numbers.panelsFit && flushTank.obstacles.length === 0, 'flush roof: leftover obstacles neither block panels nor show')
+
+// on-device finance gives the same numbers as backend finance.compute
+// (backend: kwp 3, DL tariff 6.5, bill 3000/month, 1500 kWh/kWp -> cost 170000-205000, subsidy 78000, savings 29250, payback 3.1-4.3)
+import { calcFinance } from '../lib/finance'
+const local = calcFinance(3, 4500, (3000 / 6.5) * 12, true, { ...fp, tariff: 6.5 })
+ok(local.costRange[0] === 170000 && local.costRange[1] === 205000, `local cost matches backend (${local.costRange})`)
+ok(local.subsidy === 78000 && local.netCostRange[0] === 92000 && local.netCostRange[1] === 127000, 'local subsidy and net cost match backend')
+ok(local.savingsYearRange[0] === 29250 && local.paybackRange[0] === 3 && local.paybackRange[1] === 5, `local savings/payback match backend (${local.savingsYearRange}, ${local.paybackRange})`)
+const over = calcFinance(3, 4500, 2000, true, { ...fp, tariff: 6.5 })
+ok(over.savingsYearRange[0] === 13000 && over.notes.length === 1, 'energy beyond what you use earns nothing')
+
+// skyline does not count a tall neighbour a second time
+import { withoutNeighbours } from '../lib/neighbours'
+const west = [{ id: 'w', side: 'W' as const, floors: 6 }]
+const street = flatH(20)
+const adj = withoutNeighbours(street, west, big.points, GEO_MPU, 2)
+ok(adj[27] === 3 && adj[9] === 20, `west neighbour clears the west skyline only (W ${adj[27]}, E ${adj[9]})`)
+ok(withoutNeighbours(flatH(60), west, big.points, GEO_MPU, 2)[27] === 60, 'skyline taller than the neighbour is kept')
+ok(withoutNeighbours(street, [], big.points, GEO_MPU) === street, 'no neighbours => skyline unchanged')
+
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED'); process.exit(fails ? 1 : 0)

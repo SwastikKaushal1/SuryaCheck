@@ -16,17 +16,16 @@ export const tariffFor = (ref: ReferenceData, stateCode: string) =>
 
 /** Inputs for the on-device finance stand-in used while POST /finance loads or is down. */
 export function financeParamsFrom(ref: ReferenceData, stateCode: string): FinanceParams {
-  const tariff = tariffFor(ref, stateCode)
-  const [f0, f1] = ref.cost.firstKwRange
-  const [e0, e1] = ref.cost.extraKwRange
   return {
-    costPerKwRange: [Math.round((f0 + 2 * e0) / 3), Math.round((f1 + 2 * e1) / 3)],
-    tariffRangePerUnit: [tariff * 0.95, tariff * 1.05],
+    firstKwRange: ref.cost.firstKwRange,
+    extraKwRange: ref.cost.extraKwRange,
+    tariff: tariffFor(ref, stateCode),
     co2KgPerKwh: ref.co2.kgPerKwh,
     subsidy: {
       perKwFirstTwo: ref.subsidy.centralPerKwFirst2,
       thirdKw: ref.subsidy.centralThirdKw,
       cap: ref.subsidy.centralCap,
+      stateTopUp: ref.states[(stateCode || '').toUpperCase()]?.topUp ?? 0,
     },
   }
 }

@@ -25,7 +25,7 @@ Type an address and your monthly electricity bill. SuryaCheck then:
 5. Picks the tilt that gives the most useful energy, using real PVGIS yield data.
 6. Shows subsidy, cost range, savings and payback, and exports a PDF report or a WhatsApp message.
 
-No login, about three minutes. There is no machine-learning model: everything is geometry, sun physics and public data, so every number can be explained and checked. See [`docs/HOW_IT_WORKS.md`](docs/HOW_IT_WORKS.md).
+No login, about three minutes. There is no machine-learning model: everything is geometry, sun physics and public data, so every number can be explained and checked. See [`docs/CODE_WALKTHROUGH.md`](docs/CODE_WALKTHROUGH.md).
 
 ## Repository layout
 
@@ -42,7 +42,7 @@ suryacheck/
 │   ├── finance.py        subsidy, cost and payback rules
 │   ├── reference.json    tariffs, panel size, subsidy numbers
 │   └── tests/            API tests with the outside services stubbed
-├── docs/                 HOW_IT_WORKS.md (overview), CODE_WALKTHROUGH.md (file by file)
+├── docs/                 CODE_WALKTHROUGH.md (file by file)
 └── docker-compose.yml    one-command run
 ```
 

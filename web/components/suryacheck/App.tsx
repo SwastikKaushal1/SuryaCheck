@@ -26,12 +26,11 @@ import {
 import { buildPlanModel, DEFAULT_PANEL, TILTS, type SkylineLoss, type UserInputs } from '@/lib/plan'
 import { FALLBACK_REFERENCE, financeParamsFrom, tariffFor } from '@/lib/reference'
 import { horizonFromStops, skylineLossPct } from '@/lib/solar'
+import { withoutNeighbours } from '@/lib/neighbours'
 import { useAsync } from '@/lib/useAsync'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 
 type Screen = 'landing' | 'where' | 'quick' | 'roof' | 'obstacles' | 'plan' | 'skyline' | 'summary'
-
-const ORDER: Screen[] = ['landing', 'where', 'quick', 'roof', 'obstacles', 'plan', 'skyline', 'summary']
 
 const BACK: Partial<Record<Screen, Screen>> = {
   where: 'landing',
@@ -170,16 +169,24 @@ export default function App() {
     }
   }, [building.data, committed])
 
+  // Tall neighbours already shade the plan directly, so the skyline must not count them a second time.
+  const adjustHorizon = (h: number[]) => (roof ? withoutNeighbours(h, neighbours, roof.points, roof.metersPerUnit, houseFloors) : h)
+  const effectiveHorizon = useMemo(
+    () => (skylineHorizon ? adjustHorizon(skylineHorizon) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [skylineHorizon, neighbours, roof, houseFloors],
+  )
+
   // Skyline shade, measured by PVGIS with the scanned horizon (edited by the person).
-  const horizonKey = skylineHorizon ? skylineHorizon.map((h) => h.toFixed(1)).join(',') : ''
+  const horizonKey = effectiveHorizon ? effectiveHorizon.map((h) => h.toFixed(1)).join(',') : ''
   const skyYields = useAsync(
-    committed && skylineHorizon
-      ? (signal) => api.yields({ lat: committed.lat, lon: committed.lng, tilts: TILTS, horizon: skylineHorizon }, signal)
+    committed && effectiveHorizon
+      ? (signal) => api.yields({ lat: committed.lat, lon: committed.lng, tilts: TILTS, horizon: effectiveHorizon }, signal)
       : null,
     [commitKey, horizonKey],
   )
   const skyline = useMemo<SkylineLoss | null>(() => {
-    if (!skylineHorizon) return null
+    if (!effectiveHorizon) return null
     const clear = clearYields.data
     const sky = skyYields.data
     if (clear && sky) {
@@ -187,8 +194,8 @@ export default function App() {
       const mean = ratios.reduce((a, b) => a + b, 0) / ratios.length
       return { lossPct: Math.max(0, Math.round((1 - mean) * 100)), yields: sky, source: 'pvgis' }
     }
-    return { lossPct: skylineLossPct(skylineHorizon), yields: null, source: 'estimate' }
-  }, [skylineHorizon, clearYields.data, skyYields.data])
+    return { lossPct: skylineLossPct(effectiveHorizon), yields: null, source: 'estimate' }
+  }, [effectiveHorizon, clearYields.data, skyYields.data])
 
   // ---------- numbers shown on screen ----------
   const location: LocationData = {
@@ -314,13 +321,12 @@ export default function App() {
 
   return (
     <AppShell
-      step={ORDER.indexOf(view) + 1}
+      landing={screen === 'landing'}
       onBack={backTarget ? () => go(backTarget) : undefined}
       onHome={screen === 'landing' ? undefined : () => go('landing')}
-      headerRight={view === 'summary' ? <LangToggle lang={lang} onChange={setLang} /> : undefined}
       desktopStep={DESKTOP_STEP[view]}
       onDesktopStep={goToDesktopStep}
-      navRight={<LangToggle lang={lang} onChange={setLang} />}
+      langToggle={<LangToggle lang={lang} onChange={setLang} />}
     >
       {screen === 'landing' && <Landing onPlace={choosePlace} />}
 
@@ -420,6 +426,8 @@ export default function App() {
           key={scanSession}
           readings={scanStops}
           baseHorizon={scannedHorizon}
+          adjustHorizon={adjustHorizon}
+          neighbourSides={neighbours.map((n) => n.side)}
           onApply={applySkyline}
         />
       )}

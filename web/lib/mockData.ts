@@ -69,14 +69,20 @@ export interface TiltRow {
   kWhYear: number
 }
 
+/** Same inputs as backend finance.compute, so the on-device stand-in gives the same numbers. */
 export interface FinanceParams {
-  costPerKwRange: Range
-  tariffRangePerUnit: Range
+  /** Installed cost of the first kW, then of every extra kW (rupees, low to high). */
+  firstKwRange: Range
+  extraKwRange: Range
+  /** Rupees per unit for this state. */
+  tariff: number
   co2KgPerKwh: number
   subsidy: {
     perKwFirstTwo: number
     thirdKw: number
     cap: number
+    /** Extra subsidy some states add on top of the central one. */
+    stateTopUp: number
   }
 }
 

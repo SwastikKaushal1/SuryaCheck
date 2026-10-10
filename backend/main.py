@@ -14,8 +14,6 @@ import finance
 import geo
 
 app = FastAPI(title="SuryaCheck API")
-app.add_middleware(CORSMiddleware, allow_origins=["*"],
-                   allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["*"])
 
 DEFAULT_TILT = 20
 
@@ -23,6 +21,21 @@ DEFAULT_TILT = 20
 # ---------- error shaping: always {error, hint} ----------
 def err(status, error, hint):
     return JSONResponse(status_code=status, content={"error": error, "hint": hint})
+
+
+# Catch crashes here, inside CORS, so the browser still gets the {error, hint} body.
+# (A plain exception_handler(Exception) runs outside CORS and the browser sees a CORS failure.)
+@app.middleware("http")
+async def on_any(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception:
+        return err(500, "server_error", "Something broke on our side. Please try again.")
+
+
+# Added after the catch-all, so it wraps it and adds CORS headers to every answer.
+app.add_middleware(CORSMiddleware, allow_origins=["*"],
+                   allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["*"])
 
 
 @app.exception_handler(RequestValidationError)
@@ -42,11 +55,6 @@ async def on_http(_: Request, exc: StarletteHTTPException):
 async def on_upstream(_: Request, exc: geo.UpstreamError):
     return err(502, f"{exc.service}_unavailable",
                f"{exc.service} did not answer ({exc.message}). Please try again in a moment.")
-
-
-@app.exception_handler(Exception)
-async def on_any(_: Request, exc: Exception):
-    return err(500, "server_error", "Something broke on our side. Please try again.")
 
 
 # ---------- routes ----------

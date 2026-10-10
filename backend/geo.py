@@ -139,7 +139,10 @@ def building(lat, lon, radius=40):
     for url in OVERPASS_MIRRORS:
         try:
             req = urllib.request.Request(url, data=body, headers={"User-Agent": UA})
-            els = _open(req, "Overpass", timeout=25, tries=1).get("elements", [])
+            data = _open(req, "Overpass", timeout=25, tries=1)
+            if not isinstance(data, dict):
+                raise UpstreamError("Overpass", "unexpected response")
+            els = data.get("elements") or []
             break
         except UpstreamError as e:
             last = e
