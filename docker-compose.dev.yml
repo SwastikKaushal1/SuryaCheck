@@ -1,0 +1,31 @@
+# Live-reload version for while you are editing code:
+#   docker compose -f docker-compose.dev.yml up
+# Save a file in web/ or backend/ and the site updates by itself. No rebuild needed.
+# Ports are bound to 127.0.0.1, so only this computer can reach it (not your Wi-Fi).
+services:
+  backend:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    command: sh -c "pip install -q -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  web:
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      WATCHPACK_POLLING: "true"   # makes file-change detection work on Windows
+    volumes:
+      - ./web:/app
+      - web_node_modules:/app/node_modules   # keeps Linux packages apart from your Windows ones
+    command: sh -c "npm install -g pnpm && pnpm install && pnpm dev -H 0.0.0.0"
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  web_node_modules:
