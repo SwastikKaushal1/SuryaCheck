@@ -14,6 +14,8 @@ No login. No machine learning. Every number can be explained and checked.
 
 > Built at **Bharat Builds Tour, Environmental Hacks** (Oct 8 to 11, 2026) by **Swastik Kaushal**. Track 03: Waste and Energy.
 
+**🌐 Live app: [d3s69kasxcslyo.cloudfront.net](https://d3s69kasxcslyo.cloudfront.net)** (hosted on AWS: S3 + CloudFront, API on Lambda)
+
 [Run it](#-run-it) · [How it works](#-how-it-works) · [Deploy on AWS](#%EF%B8%8F-deploy-on-aws) · [Report a bug](../../issues)
 
 ---
@@ -124,6 +126,7 @@ SuryaCheck/
 │   ├── finance.py               subsidy, cost and payback rules
 │   ├── reference.json           tariffs, panel size, subsidy numbers
 │   └── tests/                   API tests with outside services stubbed
+├── infra/                       AWS deploy: SAM template + one-command script
 ├── docs/                        how it works, file-by-file walkthrough
 ├── .github/workflows/ci.yml     tests on every push
 └── docker-compose.yml           one-command run
@@ -153,14 +156,39 @@ Errors always come back as `{ "error", "hint" }`.
 
 ## ☁️ Deploy on AWS
 
-The backend is already Lambda-ready (`handler = Mangum(app)` in `backend/main.py`). The target setup:
+SuryaCheck deploys to AWS with **AWS SAM** (open source) in one command:
 
 ```
-Browser ─▶ CloudFront ─▶ S3 (static frontend)
-              └────────▶ API Gateway ─▶ Lambda (FastAPI)
+Browser ─▶ CloudFront ─▶ S3 (static Next.js export, private bucket)
+   │
+   └─────▶ API Gateway (HTTP API, throttled) ─▶ Lambda (FastAPI via Mangum, Python 3.12)
+                                                   ├─▶ PVGIS (solar yield)
+                                                   └─▶ OpenStreetMap: Nominatim, Overpass, Photon
 ```
 
-Deployment files are planned under `infra/`.
+| Piece | AWS service | Where |
+|---|---|---|
+| API | Lambda + API Gateway HTTP API, X-Ray tracing, CloudWatch Logs (14 days) | [`infra/template.yaml`](infra/template.yaml) |
+| Website | S3 (private, encrypted) + CloudFront (HTTPS, HTTP/3, Origin Access Control) | [`infra/template.yaml`](infra/template.yaml) |
+| Build and deploy | AWS SAM CLI + AWS CLI | [`infra/deploy.ps1`](infra/deploy.ps1) |
+
+**You need:** an AWS account, the [AWS CLI](https://aws.amazon.com/cli/) (run `aws configure`), the [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html), Docker Desktop (running) and pnpm.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File infra\deploy.ps1
+```
+
+It stages the backend, builds it in a Lambda-compatible container, deploys the stack to **Sydney (ap-southeast-2)** (accounts made with AWS's new sign-up in India are limited to it; CloudFront still serves the site from Indian edge locations), builds the site with the new API URL, uploads it to S3 and refreshes CloudFront. It prints the website URL at the end. Run it again to ship an update. Options: `-Stack <name> -Region <region>`.
+
+Set a spending alarm first (one time, per AWS account): a $5 monthly budget that emails you at 50% and 80% spent and if the month is forecast to go over. It counts usage before credits, so you are warned even while credits pay.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File infra\budget.ps1 -Email you@example.com
+```
+
+Notes:
+- The API only answers browsers coming from the CloudFront site (and `localhost:3000` for development), via `CORS_ORIGINS`.
+- Everything fits the AWS free tier for a demo. To remove it all: empty the site bucket, then `sam delete --stack-name suryacheck --region ap-southeast-2`.
 
 ## 🔒 Privacy
 

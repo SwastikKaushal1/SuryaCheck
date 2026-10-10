@@ -6,18 +6,9 @@ import { Card, SectionTitle } from '../Card'
 import { PrintReport } from '../PrintReport'
 import { Tag, type TagKind } from '../Tag'
 import type { LoanPlan } from '@/lib/finance'
-import { inr, kw, lakhRange, num, rupeeRange, yearsRange } from '@/lib/format'
-import { t, type Lang } from '@/lib/i18n'
+import { inr, kw, lakhRange, rupeeRange, unitsYear, yearsRange } from '@/lib/format'
+import { INSTALLER_QUESTIONS, t, type Lang } from '@/lib/i18n'
 import type { PlanModel } from '@/lib/plan'
-
-const INSTALLER_QUESTIONS = [
-  "Is the quote's kW the same as the panel total?",
-  'What is the panel brand and warranty?',
-  'Is the subsidy paperwork included?',
-  'Who handles the net-metering application with the electricity company?',
-  'What does the quote say about the inverter and its warranty?',
-  'What happens if the system makes less power than promised?',
-]
 
 export function LangToggle({ lang, onChange }: { lang: Lang; onChange: (lang: Lang) => void }) {
   return (
@@ -39,12 +30,12 @@ export function LangToggle({ lang, onChange }: { lang: Lang; onChange: (lang: La
   )
 }
 
-function Row({ label, value, tag }: { label: string; value: string; tag: TagKind }) {
+function Row({ label, value, tag, lang }: { label: string; value: string; tag: TagKind; lang: Lang }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-amber-900/10 py-3 last:border-b-0">
       <div className="flex flex-col gap-1">
         <span className="text-base text-ink-soft">{label}</span>
-        <Tag kind={tag} />
+        <Tag kind={tag} lang={lang} />
       </div>
       <span className="text-right text-xl font-bold text-ink">{value}</span>
     </div>
@@ -56,10 +47,10 @@ function planFacts(plan: PlanModel, lang: Lang, loan: LoanPlan | null): (readonl
   const facts: (readonly [string, string])[] = [
     [t(lang, 'panels'), String(numbers.panelsFinal)],
     [t(lang, 'systemSize'), kw(numbers.kWp)],
-    [t(lang, 'yearlyEnergy'), `${num(numbers.kWhFinal)} kWh`],
-    [t(lang, 'cost'), lakhRange(finance.costRange)],
+    [t(lang, 'yearlyEnergy'), unitsYear(numbers.kWhFinal, lang)],
+    [t(lang, 'cost'), lakhRange(finance.costRange, lang)],
     [t(lang, 'subsidy'), finance.eligible ? inr(finance.subsidy) : '₹0'],
-    [t(lang, 'payback'), yearsRange(finance.paybackRange)],
+    [t(lang, 'payback'), yearsRange(finance.paybackRange, lang)],
   ]
   if (loan) {
     const emi = loan.emiRange[0] === loan.emiRange[1] ? inr(loan.emiRange[0]) : rupeeRange(loan.emiRange)
@@ -92,7 +83,7 @@ export function Summary({ plan, loan = null, lang, placeName = '' }: { plan: Pla
       <div className="flex flex-col gap-5">
       <Card className="flex flex-col py-2">
         {facts.map(([label, value]) => (
-          <Row key={label} label={label} value={value} tag="estimate" />
+          <Row key={label} label={label} value={value} tag="estimate" lang={lang} />
         ))}
       </Card>
 
@@ -111,7 +102,7 @@ export function Summary({ plan, loan = null, lang, placeName = '' }: { plan: Pla
       <section aria-label={t(lang, 'installerQs')} className="flex flex-col gap-3">
         <SectionTitle>{t(lang, 'installerQs')}</SectionTitle>
         <ul className="flex flex-col gap-2">
-          {INSTALLER_QUESTIONS.map((q, i) => (
+          {INSTALLER_QUESTIONS[lang].map((q, i) => (
             <li key={q}>
               <label className="flex min-h-14 cursor-pointer items-start gap-3 rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-amber-900/5 has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-sun/40">
                 <input

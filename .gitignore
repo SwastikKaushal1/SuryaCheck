@@ -24,3 +24,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.log
+
+# AWS deploy staging (infra/deploy.ps1)
+infra/build/

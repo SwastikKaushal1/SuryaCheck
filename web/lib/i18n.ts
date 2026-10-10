@@ -43,4 +43,30 @@ const dictionary = {
 
 export type TextKey = keyof (typeof dictionary)['en']
 
+/** Questions to take to every installer (summary screen and checklist). */
+export const INSTALLER_QUESTIONS: Record<Lang, string[]> = {
+  en: [
+    "Is the quote's kW the same as the panel total?",
+    'What is the panel brand and warranty?',
+    'Is the subsidy paperwork included?',
+    'Who handles the net-metering application with the electricity company?',
+    'What does the quote say about the inverter and its warranty?',
+    'What happens if the system makes less power than promised?',
+  ],
+  hi: [
+    'क्या कोटेशन में लिखा kW पैनलों के कुल जोड़ के बराबर है?',
+    'पैनल किस ब्रांड के हैं और उनकी वारंटी कितनी है?',
+    'क्या सब्सिडी के कागज़ात का काम इसमें शामिल है?',
+    'बिजली कंपनी में नेट-मीटरिंग का आवेदन कौन करेगा?',
+    'कोटेशन में इन्वर्टर और उसकी वारंटी के बारे में क्या लिखा है?',
+    'अगर सिस्टम वादे से कम बिजली बनाए तो क्या होगा?',
+  ],
+}
+
+/** The small source tags ("estimate", "from PVGIS", "your input"). */
+export const TAG_TEXT: Record<Lang, { estimate: string; pvgis: string; input: string }> = {
+  en: { estimate: 'estimate', pvgis: 'from PVGIS', input: 'your input' },
+  hi: { estimate: 'अनुमान', pvgis: 'PVGIS से', input: 'आपकी जानकारी' },
+}
+
 export const t = (lang: Lang, key: TextKey): string => dictionary[lang][key]

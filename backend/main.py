@@ -34,7 +34,9 @@ async def on_any(request: Request, call_next):
 
 
 # Added after the catch-all, so it wraps it and adds CORS headers to every answer.
-app.add_middleware(CORSMiddleware, allow_origins=["*"],
+# On AWS, CORS_ORIGINS lists the CloudFront site (set by infra/template.yaml); locally anything may call it.
+CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()]
+app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS,
                    allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["*"])
 
 
@@ -158,4 +160,5 @@ def _prewarm():
 if os.environ.get("PREWARM") == "1":
     threading.Thread(target=_prewarm, daemon=True).start()
 
-handler = Mangum(app)
+# AWS Lambda entry point (infra/template.yaml: Handler main.handler). The app has no startup work.
+handler = Mangum(app, lifespan="off")

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { LogoMark } from './AppShell'
 import { ObstacleLayer, PanelLayer, ScaleReference } from './MapLayers'
-import { inr, kw, lakhRange, num, yearsRange } from '@/lib/format'
+import { inr, kw, lakhRange, num, unitsYear, yearsRange } from '@/lib/format'
 import { polygonBounds, toPoints } from '@/lib/geometry'
 import type { Lang } from '@/lib/i18n'
 import { DEFAULT_PANEL, type PlanModel } from '@/lib/plan'
@@ -235,9 +235,9 @@ export function PrintReport({ plan, lang, placeName }: { plan: PlanModel; lang: 
           {[
             [T.panels, String(numbers.panelsFinal)],
             [T.size, kw(numbers.kWp)],
-            [T.energy, `${num(numbers.kWhFinal)} kWh`],
-            [T.netCost, lakhRange([netLow, netHigh])],
-            [T.payback, yearsRange(finance.paybackRange)],
+            [T.energy, unitsYear(numbers.kWhFinal, lang)],
+            [T.netCost, lakhRange([netLow, netHigh], lang)],
+            [T.payback, yearsRange(finance.paybackRange, lang)],
           ].map(([k, v]) => (
             <div key={k} className="rounded-lg border border-amber-200 bg-[#FFF8E7] px-2.5 py-2.5">
               <p className="text-[10px] font-bold uppercase tracking-wide text-[#6a5a49]">{k}</p>

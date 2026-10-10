@@ -27,10 +27,13 @@ import { buildPlanModel, DEFAULT_PANEL, TILTS, type SkylineLoss, type UserInputs
 import { FALLBACK_REFERENCE, financeParamsFrom, loanTermsFrom, tariffFor } from '@/lib/reference'
 import { horizonFromStops, skylineLossPct } from '@/lib/solar'
 import { withoutNeighbours } from '@/lib/neighbours'
+import { loadProgress, maxIdNumber, saveProgress } from '@/lib/progress'
 import { useAsync } from '@/lib/useAsync'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 
 type Screen = 'landing' | 'where' | 'quick' | 'roof' | 'obstacles' | 'plan' | 'skyline' | 'summary'
+/** Every screen, for checking a saved one is still valid. */
+const ORDER_ALL: Screen[] = ['landing', 'where', 'quick', 'roof', 'obstacles', 'plan', 'skyline', 'summary']
 
 const BACK: Partial<Record<Screen, Screen>> = {
   where: 'landing',
@@ -125,6 +128,41 @@ export default function App() {
   useEffect(() => {
     window.scrollTo({ top: 0 })
   }, [screen])
+
+  // ---------- keep progress across a refresh ----------
+  // Restored after the first render (not in useState) so the server-rendered page and the browser agree.
+  const [restored, setRestored] = useState(false)
+  useEffect(() => {
+    const p = loadProgress()
+    if (p) {
+      setPlace(p.place)
+      setPin(p.pin)
+      setCommitted(p.committed)
+      setInputs(p.inputs)
+      setRoof(p.roof)
+      setRoofType(p.roofType)
+      setObstacles(p.obstacles ?? [])
+      setNeighbours(p.neighbours ?? [])
+      setHouseFloors(p.houseFloors ?? 2)
+      setSkylineHorizon(p.skylineHorizon)
+      setScanDone(!!p.scanDone)
+      setLang(p.lang === 'hi' ? 'hi' : 'en')
+      nextId.current = maxIdNumber([...(p.obstacles ?? []), ...(p.neighbours ?? [])].map((x) => x.id)) + 1
+      // Land on a screen the saved data can actually show. The shade editor has no saved draft, so reopen the plan.
+      const wanted = (p.screen === 'skyline' ? 'plan' : p.screen) as Screen
+      const needsRoof: Screen[] = ['obstacles', 'plan', 'summary']
+      const ok =
+        ORDER_ALL.includes(wanted) &&
+        (!needsRoof.includes(wanted) || (p.roof && p.committed)) &&
+        (wanted !== 'roof' || p.committed)
+      setScreen(ok ? wanted : p.committed ? 'roof' : 'where')
+    }
+    setRestored(true)
+  }, [])
+  useEffect(() => {
+    if (!restored) return
+    saveProgress({ screen, place, pin, committed, inputs, roof, roofType, obstacles, neighbours, houseFloors, skylineHorizon, scanDone, lang })
+  }, [restored, screen, place, pin, committed, inputs, roof, roofType, obstacles, neighbours, houseFloors, skylineHorizon, scanDone, lang])
 
   const frame: GeoFrame = committed ?? pin
   const eligible = inputs.ownHouse && inputs.residential

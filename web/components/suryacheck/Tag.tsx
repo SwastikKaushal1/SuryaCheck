@@ -1,12 +1,7 @@
+import { TAG_TEXT, type Lang } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 export type TagKind = 'estimate' | 'pvgis' | 'input'
-
-const LABELS: Record<TagKind, string> = {
-  estimate: 'estimate',
-  pvgis: 'from PVGIS',
-  input: 'your input',
-}
 
 const STYLES: Record<TagKind, string> = {
   estimate: 'bg-amber-100 text-amber-900 ring-amber-300',
@@ -14,7 +9,7 @@ const STYLES: Record<TagKind, string> = {
   input: 'bg-sky-100 text-sky-900 ring-sky-300',
 }
 
-export function Tag({ kind, className }: { kind: TagKind; className?: string }) {
+export function Tag({ kind, className, lang = 'en' }: { kind: TagKind; className?: string; lang?: Lang }) {
   return (
     <span
       className={cn(
@@ -23,7 +18,7 @@ export function Tag({ kind, className }: { kind: TagKind; className?: string }) 
         className,
       )}
     >
-      {LABELS[kind]}
+      {TAG_TEXT[lang][kind]}
     </span>
   )
 }
