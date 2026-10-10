@@ -1,5 +1,7 @@
 # SuryaCheck
 
+[![Tests](https://github.com/SwastikKaushal1/SuryaCheck/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SwastikKaushal1/SuryaCheck/actions/workflows/ci.yml)
+
 **A roof-aware rooftop solar planner for Indian homes. See what your own roof can produce and what it costs after subsidy.**
 
 Built at Bharat Builds Tour, Environmental Hacks (Oct 8 to 11, 2026), by Swastik Kaushal. Track 03: Waste and Energy.
