@@ -1,8 +1,8 @@
 import { calcFinance, type FinanceResult } from './finance'
-import { clamp, pointInPolygon, polygonBounds, polygonCentroid, rectCorners, rectsOverlap, scalePolygon, type Rect } from './geometry'
+import { clamp, convexOverlap, pointInPolygon, polygonBounds, polygonCentroid, rectCorners, scalePolygon, type Rect } from './geometry'
 import type { FinanceParams, Neighbour, Obstacle, Point, RoofData } from './mockData'
 import { neighbourBlock } from './neighbours'
-import { castsShadow } from './obstacles'
+import { castsShadow, obstacleFootprint } from './obstacles'
 import { seasonsFor, shadowHull, sunPosition } from './solar'
 
 /** Panel size and power. Live values come from GET /reference. */
@@ -108,6 +108,12 @@ export function roofAngle(points: Point[]): number {
   return Math.abs(m) <= 25 ? Math.round(m * 10) / 10 : 0
 }
 
+/** Spreads the plan's yearly energy over the months in the same shape as PVGIS's monthly figures. */
+export function monthlyFromShape(yearKwh: number, shape: number[]): number[] {
+  const total = shape.reduce((a, b) => a + b, 0)
+  return total > 0 ? shape.map((v) => (yearKwh * v) / total) : shape.map(() => yearKwh / 12)
+}
+
 export function buildPlanModel(args: PlanArgs): PlanModel {
   const { roof, neighbours, houseFloors = 0, flush, latitude, panel, yields, fallbackYield, skyline, consumptionKwhYear } = args
   // Sloped and sheet roofs are used as they are: the obstacles screen hides tanks and rooms for them,
@@ -152,12 +158,7 @@ export function buildPlanModel(args: PlanArgs): PlanModel {
 
   const usable = scalePolygon(roof.points, polygonCentroid(roof.points), 0.93)
   const clearance = CLEARANCE_M / mpu
-  const blocked: Rect[] = obstacles.map((o) => ({
-    x: o.x - o.w / 2 - clearance,
-    y: o.y - o.h / 2 - clearance,
-    w: o.w + 2 * clearance,
-    h: o.h + 2 * clearance,
-  }))
+  const blocked: Point[][] = obstacles.map(obstacleFootprint)
   const winterNoon = seasons[0].peak
 
   // Rows follow the roof's own edge when it is only a little off true south, the way an installer lays them.
@@ -171,10 +172,7 @@ export function buildPlanModel(args: PlanArgs): PlanModel {
   }
   const usableR = usable.map((p) => spin(p, -theta))
   const boundsR = polygonBounds(usableR)
-  const blockedR: Rect[] = blocked.map((r) => {
-    const bb = polygonBounds(rectCorners(r).map((p) => spin(p, -theta)))
-    return { x: bb.minX, y: bb.minY, w: bb.w, h: bb.h }
-  })
+  const blockedR: Point[][] = blocked.map((poly) => poly.map((p) => spin(p, -theta)))
 
   /** Every spot a panel fits at this tilt, in the turned frame where rows run left to right. */
   function pack(tiltDeg: number): Rect[] {
@@ -190,7 +188,7 @@ export function buildPlanModel(args: PlanArgs): PlanModel {
       for (let y = boundsR.minY + oy; y + ph <= boundsR.maxY; y += stepY)
         for (let x = boundsR.minX + ox; x + pw <= boundsR.maxX; x += stepX) {
           const r = { x, y, w: pw, h: ph }
-          if (rectCorners(r).every((c) => pointInPolygon(c, usableR)) && !blockedR.some((b) => rectsOverlap(r, b))) cells.push(r)
+          if (rectCorners(r).every((c) => pointInPolygon(c, usableR)) && !blockedR.some((b) => convexOverlap(rectCorners({ x: r.x - clearance, y: r.y - clearance, w: r.w + 2 * clearance, h: r.h + 2 * clearance }), b))) cells.push(r)
         }
       return cells
     }

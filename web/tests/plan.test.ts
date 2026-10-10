@@ -88,17 +88,38 @@ const tallBox = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(6
 const lowBox = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(6000), obstacles: [{ ...boxObj, heightM: 0.5 }] })
 ok(tallBox.numbers.kWhFinal < lowBox.numbers.kWhFinal, 'a taller custom item never helps yield')
 
+// turned items: the footprint, the shadow and the panel exclusion all follow the angle
+import { obstacleFootprint } from '../lib/obstacles'
+import { polygonBounds } from '../lib/geometry'
+const bar = { id: 'bar', kind: 'clear' as const, x: 200, y: 150, w: 80, h: 16, heightM: 0 }
+const fpFlat = polygonBounds(obstacleFootprint(bar))
+const fpTurned = polygonBounds(obstacleFootprint({ ...bar, angle: 90 }))
+ok(Math.abs(fpFlat.w - 80) < 1e-6 && Math.abs(fpTurned.w - 16) < 1e-6 && Math.abs(fpTurned.h - 80) < 1e-6, 'a box turned 90 degrees swaps its width and length')
+const turnedBox = { ...boxObj, w: 60, h: 12, angle: 90, heightM: 3 }
+const flatShadow = polygonBounds(sh({ ...turnedBox, angle: 0 }, { azimuth: 90, elevation: 30 }, GEO_MPU))
+const turnedShadow = polygonBounds(sh(turnedBox, { azimuth: 90, elevation: 30 }, GEO_MPU))
+ok(Math.abs(flatShadow.h - turnedShadow.h) > 20, 'turning an item changes the shadow it throws')
+const turnedBar = { ...bar, w: 90, h: 18, angle: 40 }
+const withBar = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(6000), obstacles: [turnedBar] })
+ok(withBar.numbers.panelsFit < huge.numbers.panelsFit, `a turned keep-clear zone removes panel spots (${huge.numbers.panelsFit} -> ${withBar.numbers.panelsFit})`)
+const barShape = obstacleFootprint(turnedBar)
+ok(!withBar.panels.some((p) => rectCorners(p).some((c) => pointInPolygon(c, barShape))), 'no panel corner sits inside the turned zone')
+const flatBarPlan = buildPlanModel({ ...base, roof: big, consumptionKwhYear: units(6000), obstacles: [{ ...turnedBar, angle: 0 }] })
+ok(withBar.numbers.panelsFit >= flatBarPlan.numbers.panelsFit - 6, 'a diagonal zone is not treated as a huge bounding box')
+
 // sloped / sheet roofs ignore tanks marked while the roof was set to flat
 const flushTank = buildPlanModel({ ...base, roof: big, flush: true, consumptionKwhYear: units(6000), obstacles: [{ ...boxObj, heightM: 4 }] })
 ok(flushTank.numbers.panelsFit === flush.numbers.panelsFit && flushTank.obstacles.length === 0, 'flush roof: leftover obstacles neither block panels nor show')
 
 // on-device finance gives the same numbers as backend finance.compute
-// (backend: kwp 3, DL tariff 6.5, bill 3000/month, 1500 kWh/kWp -> cost 170000-205000, subsidy 78000, savings 29250, payback 3.1-4.3)
-import { calcFinance } from '../lib/finance'
+// (backend, no state top-up: kwp 3, tariff 6.5, bill 3000/month, 1500 kWh/kWp -> cost 170000-220000, subsidy 78000, savings 29250, payback 3.1-4.9)
+import { calcFinance, emiFor, loanPlan } from '../lib/finance'
 const local = calcFinance(3, 4500, (3000 / 6.5) * 12, true, { ...fp, tariff: 6.5 })
-ok(local.costRange[0] === 170000 && local.costRange[1] === 205000, `local cost matches backend (${local.costRange})`)
-ok(local.subsidy === 78000 && local.netCostRange[0] === 92000 && local.netCostRange[1] === 127000, 'local subsidy and net cost match backend')
+ok(local.costRange[0] === 170000 && local.costRange[1] === 220000, `local cost matches backend (${local.costRange})`)
+ok(local.subsidy === 78000 && local.netCostRange[0] === 92000 && local.netCostRange[1] === 142000, 'local subsidy and net cost match backend')
 ok(local.savingsYearRange[0] === 29250 && local.paybackRange[0] === 3 && local.paybackRange[1] === 5, `local savings/payback match backend (${local.savingsYearRange}, ${local.paybackRange})`)
+const delhi = (kW: number) => calcFinance(kW, kW * 1500, null, true, { ...fp, tariff: 6.1, subsidy: { ...fp.subsidy, statePerKw: 10000, stateCap: 30000 } })
+ok(delhi(3).subsidy === 108000 && delhi(1.1).subsidy === 33000 + 11000, `Delhi top-up is per kW, capped (3 kW ${delhi(3).subsidy}, 1.1 kW ${delhi(1.1).subsidy})`)
 const over = calcFinance(3, 4500, 2000, true, { ...fp, tariff: 6.5 })
 ok(over.savingsYearRange[0] === 13000 && over.notes.length === 1, 'energy beyond what you use earns nothing')
 
@@ -110,5 +131,20 @@ const adj = withoutNeighbours(street, west, big.points, GEO_MPU, 2)
 ok(adj[27] === 3 && adj[9] === 20, `west neighbour clears the west skyline only (W ${adj[27]}, E ${adj[9]})`)
 ok(withoutNeighbours(flatH(60), west, big.points, GEO_MPU, 2)[27] === 60, 'skyline taller than the neighbour is kept')
 ok(withoutNeighbours(street, [], big.points, GEO_MPU) === street, 'no neighbours => skyline unchanged')
+
+// EMI next to savings
+ok(Math.abs(emiFor(100000, 7, 10) - 1161) < 1, `EMI matches the standard formula (${emiFor(100000, 7, 10).toFixed(0)} for 1 lakh, 7%, 10 yr)`)
+const lp = loanPlan(local, { ratePct: 7, years: 10, maxAmount: 200000 })!
+ok(lp.loanRange[1] === 142000 && lp.upfrontRange[1] === 0 && lp.monthlySavings === Math.round(29250 / 12), 'loan covers the cost after subsidy')
+ok(lp.paysFromDayOne === (lp.emiRange[1] <= lp.monthlySavings), `pays-from-day-one flag is honest (EMI ${lp.emiRange}, saves ${lp.monthlySavings})`)
+const capped = loanPlan({ ...local, netCostRange: [250000, 300000] }, { ratePct: 7, years: 10, maxAmount: 200000 })!
+ok(capped.loanRange[1] === 200000 && capped.upfrontRange[1] === 100000, 'cost above the loan limit is paid up front')
+
+// monthly chart keeps the plan's yearly total
+import { monthlyFromShape } from '../lib/plan'
+const months = monthlyFromShape(5280, [100, 110, 140, 150, 155, 130, 110, 105, 120, 130, 110, 95])
+ok(Math.abs(months.reduce((a, b) => a + b, 0) - 5280) < 1e-6 && months[4] > months[6], 'monthly split adds up to the year and keeps the monsoon dip')
+import { formatHour } from '../lib/solar'
+ok(formatHour(13.5) === '1:30 pm' && formatHour(7) === '7:00 am' && formatHour(11.99) === '12:00 pm', `formatHour (${formatHour(13.5)}, ${formatHour(11.99)})`)
 
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED'); process.exit(fails ? 1 : 0)

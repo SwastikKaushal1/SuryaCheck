@@ -97,6 +97,23 @@ export function rectCorners(r: Rect): Point[] {
 export const rectsOverlap = (a: Rect, b: Rect) =>
   a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
 
+/** True when two convex shapes overlap by more than touching (separating-axis test). */
+export function convexOverlap(a: Point[], b: Point[]): boolean {
+  for (const poly of [a, b]) {
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i]
+      const q = poly[(i + 1) % poly.length]
+      const nx = q.y - p.y
+      const ny = p.x - q.x
+      let aMin = Infinity, aMax = -Infinity, bMin = Infinity, bMax = -Infinity
+      for (const v of a) { const d = v.x * nx + v.y * ny; aMin = Math.min(aMin, d); aMax = Math.max(aMax, d) }
+      for (const v of b) { const d = v.x * nx + v.y * ny; bMin = Math.min(bMin, d); bMax = Math.max(bMax, d) }
+      if (aMax <= bMin + 1e-9 || bMax <= aMin + 1e-9) return false
+    }
+  }
+  return true
+}
+
 export const toPoints = (poly: Point[]) => poly.map((p) => `${p.x},${p.y}`).join(' ')
 
 export function clientToMap(svg: SVGSVGElement | null, clientX: number, clientY: number): Point {

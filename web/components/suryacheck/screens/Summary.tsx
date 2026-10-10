@@ -5,7 +5,8 @@ import { Button } from '../Button'
 import { Card, SectionTitle } from '../Card'
 import { PrintReport } from '../PrintReport'
 import { Tag, type TagKind } from '../Tag'
-import { inr, kw, lakhRange, num, yearsRange } from '@/lib/format'
+import type { LoanPlan } from '@/lib/finance'
+import { inr, kw, lakhRange, num, rupeeRange, yearsRange } from '@/lib/format'
 import { t, type Lang } from '@/lib/i18n'
 import type { PlanModel } from '@/lib/plan'
 
@@ -50,31 +51,36 @@ function Row({ label, value, tag }: { label: string; value: string; tag: TagKind
   )
 }
 
-function planFacts(plan: PlanModel, lang: Lang) {
+function planFacts(plan: PlanModel, lang: Lang, loan: LoanPlan | null): (readonly [string, string])[] {
   const { numbers, finance } = plan
-  return [
+  const facts: (readonly [string, string])[] = [
     [t(lang, 'panels'), String(numbers.panelsFinal)],
     [t(lang, 'systemSize'), kw(numbers.kWp)],
     [t(lang, 'yearlyEnergy'), `${num(numbers.kWhFinal)} kWh`],
     [t(lang, 'cost'), lakhRange(finance.costRange)],
     [t(lang, 'subsidy'), finance.eligible ? inr(finance.subsidy) : '₹0'],
     [t(lang, 'payback'), yearsRange(finance.paybackRange)],
-  ] as const
+  ]
+  if (loan) {
+    const emi = loan.emiRange[0] === loan.emiRange[1] ? inr(loan.emiRange[0]) : rupeeRange(loan.emiRange)
+    facts.push([t(lang, 'emi'), emi], [t(lang, 'monthlySaving'), inr(loan.monthlySavings)])
+  }
+  return facts
 }
 
 /** The text sent through WhatsApp. */
-export function whatsappText(plan: PlanModel, lang: Lang, placeName: string): string {
-  const lines = planFacts(plan, lang).map(([k, v]) => `${k}: ${v}`)
+export function whatsappText(plan: PlanModel, lang: Lang, placeName: string, loan: LoanPlan | null = null): string {
+  const lines = planFacts(plan, lang, loan).map(([k, v]) => `${k}: ${v}`)
   return [`☀️ ${t(lang, 'shareHeading')}${placeName ? ` – ${placeName}` : ''}`, ...lines, '', t(lang, 'preparedBy')].join('\n')
 }
 
 /** A clean drawing of the roof and panels, used in the PDF so it prints sharply without map pictures. */
-export function Summary({ plan, lang, placeName = '' }: { plan: PlanModel; lang: Lang; placeName?: string }) {
+export function Summary({ plan, loan = null, lang, placeName = '' }: { plan: PlanModel; loan?: LoanPlan | null; lang: Lang; placeName?: string }) {
   const [checked, setChecked] = useState<Record<number, boolean>>({})
-  const facts = planFacts(plan, lang)
+  const facts = planFacts(plan, lang, loan)
 
   const shareOnWhatsApp = () => {
-    const text = whatsappText(plan, lang, placeName)
+    const text = whatsappText(plan, lang, placeName, loan)
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer')
   }
 

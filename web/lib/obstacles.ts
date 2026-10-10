@@ -1,4 +1,4 @@
-import type { Obstacle, ObstacleKind } from './mockData'
+import type { Obstacle, ObstacleKind, Point } from './mockData'
 
 export interface ObstaclePreset {
   kind: ObstacleKind
@@ -35,3 +35,29 @@ export const isRound = (o: Pick<Obstacle, 'kind' | 'shape'>) => (o.shape ?? pres
 
 /** A keep-clear zone stops panels going there but casts no shadow. */
 export const castsShadow = (o: Pick<Obstacle, 'kind'>) => o.kind !== 'clear'
+
+
+/** Turns a point around a centre, clockwise on screen (the way SVG rotate() does). */
+export function rotateAround(p: Point, c: Point, deg: number): Point {
+  const a = (deg * Math.PI) / 180
+  const dx = p.x - c.x
+  const dy = p.y - c.y
+  return { x: c.x + dx * Math.cos(a) - dy * Math.sin(a), y: c.y + dx * Math.sin(a) + dy * Math.cos(a) }
+}
+
+/** The outline an item covers on the roof, turned by its angle. Always a convex shape. */
+export function obstacleFootprint(o: Pick<Obstacle, 'kind' | 'shape' | 'x' | 'y' | 'w' | 'h' | 'angle'>): Point[] {
+  const c = { x: o.x, y: o.y }
+  const raw: Point[] = isRound(o)
+    ? Array.from({ length: 24 }, (_, i) => {
+        const a = (i / 24) * 2 * Math.PI
+        return { x: o.x + (o.w / 2) * Math.cos(a), y: o.y + (o.h / 2) * Math.sin(a) }
+      })
+    : [
+        { x: o.x - o.w / 2, y: o.y - o.h / 2 },
+        { x: o.x + o.w / 2, y: o.y - o.h / 2 },
+        { x: o.x + o.w / 2, y: o.y + o.h / 2 },
+        { x: o.x - o.w / 2, y: o.y + o.h / 2 },
+      ]
+  return o.angle ? raw.map((p) => rotateAround(p, c, o.angle!)) : raw
+}

@@ -1,4 +1,4 @@
-import { RotateCcw } from 'lucide-react'
+import { RotateCcw, Undo2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Button } from '../Button'
 import { Card } from '../Card'
@@ -24,7 +24,7 @@ export function RoofFallback({ frame, reason, onUse }: { frame: GeoFrame; reason
 
   // The satellite map knows the real scale, so no "front wall length" question is needed.
   const tapped = useMemo<RoofData | null>(
-    () => (corners.length < 4 ? null : { points: corners, metersPerUnit: GEO_MPU, areaM2: Math.round(polygonArea(corners) * GEO_MPU ** 2), source: 'corners' }),
+    () => (corners.length < 3 ? null : { points: corners, metersPerUnit: GEO_MPU, areaM2: Math.round(polygonArea(corners) * GEO_MPU ** 2), source: 'corners' }),
     [corners],
   )
   const typed = useMemo<RoofData | null>(() => {
@@ -54,7 +54,7 @@ export function RoofFallback({ frame, reason, onUse }: { frame: GeoFrame; reason
       <div className={STICKY_MAP_PANEL}>
         {method === 'tap' ? (
           <>
-            <SatelliteMap frame={frame} className={MAP_FILL} fit={DEFAULT_FIT} fitKey="tap" interactive ariaLabel="Satellite map. Tap the four corners of your roof." onTap={(p) => setCorners((c) => (c.length < 4 ? [...c, p] : c))}>
+            <SatelliteMap frame={frame} className={MAP_FILL} fit={DEFAULT_FIT} fitKey="tap" interactive ariaLabel="Satellite map. Tap around the edge of your roof. The shape closes by itself." onTap={(p) => setCorners((c) => [...c, p])}>
               {corners.length >= 3 && <RoofOutline points={corners} />}
               {corners.length === 2 && <line x1={corners[0].x} y1={corners[0].y} x2={corners[1].x} y2={corners[1].y} stroke="#FBBF24" strokeWidth="3" vectorEffect="non-scaling-stroke" />}
               {corners.map((c, i) => (
@@ -62,7 +62,7 @@ export function RoofFallback({ frame, reason, onUse }: { frame: GeoFrame; reason
               ))}
             </SatelliteMap>
             <p className="text-base font-medium text-ink" aria-live="polite">
-              {corners.length < 4 ? `Tap corner ${corners.length + 1} of 4 on your roof. Use + to zoom in.` : 'All four corners marked. Drag any corner to fine-tune.'}
+              {corners.length === 0 ? 'Tap the first corner of your roof. Use + to zoom in.' : corners.length < 3 ? `${corners.length} marked. Tap ${3 - corners.length} more corner${corners.length === 2 ? '' : 's'} and the shape closes by itself.` : `${corners.length} corners, shape closed. Tap to add more, or drag any corner to fine-tune.`}
             </p>
           </>
         ) : (
@@ -85,11 +85,17 @@ export function RoofFallback({ frame, reason, onUse }: { frame: GeoFrame; reason
 
         {method === 'tap' ? (
           <Card className="flex flex-col gap-3">
-            <p className="text-sm text-ink-soft">Tap the corners one after another around the edge of your roof, in order.</p>
-            <Button variant="ghost" onClick={() => setCorners([])} disabled={corners.length === 0} className="min-h-12">
-              <RotateCcw className="size-4" aria-hidden="true" />
-              Clear corners
-            </Button>
+            <p className="text-sm text-ink-soft">Tap around the edge of your roof, one corner after another. Use as many corners as the roof needs. The outline closes by itself, so there is no last point to find.</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="ghost" onClick={() => setCorners((c) => c.slice(0, -1))} disabled={corners.length === 0} className="min-h-12">
+                <Undo2 className="size-4" aria-hidden="true" />
+                Undo last
+              </Button>
+              <Button variant="ghost" onClick={() => setCorners([])} disabled={corners.length === 0} className="min-h-12">
+                <RotateCcw className="size-4" aria-hidden="true" />
+                Clear all
+              </Button>
+            </div>
           </Card>
         ) : (
           <Card className="flex flex-col gap-3">

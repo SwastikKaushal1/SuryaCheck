@@ -12,6 +12,12 @@ def central_subsidy(kw: float) -> float:
     return min(v, s["centralCap"])
 
 
+def state_top_up(kw: float, state) -> float:
+    """State subsidy on top of the central one, e.g. Delhi: Rs 10,000/kW up to Rs 30,000."""
+    s = state or {}
+    return min(kw * (s.get("topUpPerKw") or 0), s.get("topUpCap") or 0)
+
+
 def cost_range(kw: float):
     c = REF["cost"]
     extra = max(0.0, kw - 1)
@@ -40,7 +46,7 @@ def compute(kwp, state_code, monthly_bill, residential, own_house=True,
 
     eligible = bool(residential and own_house) or not REF["subsidy"]["residentialOnly"]
     central = central_subsidy(kwp) if eligible else 0
-    top_up = ((state or {}).get("topUp") or 0) if eligible else 0
+    top_up = state_top_up(kwp, state) if eligible else 0
     subsidy = central + top_up
 
     lo, hi = cost_range(kwp)

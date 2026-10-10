@@ -1,28 +1,83 @@
 {
-  "_note": "Indicative values. Every number marked verify must be re-checked against official sources before the demo.",
-  "panel": { "widthM": 1.13, "lengthM": 2.28, "gapM": 0.03, "kWp": 0.55, "verify": "check against a real datasheet" },
+  "_note": "Indicative values, checked October 2026. Each block says where its numbers come from. Tariffs are the least certain: Indian home tariffs are slab-based with fuel surcharges, so one number per state is an approximation (see tariffBasis).",
+  "panel": {
+    "widthM": 1.13, "lengthM": 2.28, "gapM": 0.03, "kWp": 0.55,
+    "source": "Common 550 Wp 144 half-cell mono module, 2278 x 1134 mm (e.g. Sun Gold SG-550WM, Canadian Solar CS6W-550MB-AG datasheets)",
+    "confidence": "high"
+  },
   "subsidy": {
     "centralPerKwFirst2": 30000,
     "centralThirdKw": 18000,
     "centralCap": 78000,
     "residentialOnly": true,
-    "verify": "pmsuryaghar.gov.in"
+    "source": "PM Surya Ghar CFA: Rs 30,000/kW up to 2 kW, Rs 18,000 for the 3rd kW, capped at Rs 78,000; residential grid-connected only (JBVNL CFA structure; Business Today, 28 Jul 2026). Confirm on pmsuryaghar.gov.in",
+    "confidence": "high"
   },
   "cost": {
-    "firstKwRange": [60000, 75000],
-    "extraKwRange": [55000, 65000],
-    "verify": "vendor pages, indicative only"
+    "firstKwRange": [60000, 80000],
+    "extraKwRange": [55000, 70000],
+    "source": "Gives Rs 1.7-2.2 lakh for 3 kW before subsidy. 2026 installer guides quote Rs 1.6-2.5 lakh for 3 kW DCR systems, typically Rs 55,000-65,000/kW all-in. Indicative; ask for itemised quotes",
+    "confidence": "medium"
   },
-  "co2": { "kgPerKwh": 0.71, "verify": "use the current CEA grid emission factor and cite it" },
-  "defaults": { "avgTariff": 7.0, "performanceKwhPerKwp": 1450, "verify": "placeholder tariff, replace per state" },
+  "loan": {
+    "ratePct": 7.0,
+    "years": 10,
+    "maxAmount": 200000,
+    "source": "PM Surya Ghar collateral-free loan up to Rs 2 lakh, up to 10 years. Govt reference rate repo + 0.5% (5.75%, Jul 2026); banks quote about 7-7.9%, so 7% is used. Rate is floating",
+    "confidence": "medium"
+  },
+  "co2": {
+    "kgPerKwh": 0.71,
+    "source": "CEA CO2 Baseline Database v21.0 (Nov 2025): all-India weighted average 0.710 tCO2/MWh for FY 2024-25",
+    "confidence": "high"
+  },
+  "defaults": {
+    "avgTariff": 7.0,
+    "performanceKwhPerKwp": 1450,
+    "source": "Fallback when the state is unknown: a typical Indian urban residential rate. Yield fallback is a typical Indian value; PVGIS replaces it for the real location",
+    "confidence": "low"
+  },
+  "tariffBasis": "states[].avgTariff = rupees per unit on the top slab a household using about 300 units a month pays, including the main fuel/power-purchase surcharge where known. Solar replaces those top units first, so this is what each unit saved is worth. topUpPerKw/topUpCap = state subsidy on top of the central one.",
   "states": {
-    "DL": { "name": "Delhi",         "avgTariff": 6.5, "topUp": 0, "verify": "DISCOM tariff order; Delhi state top-up not confirmed" },
-    "HR": { "name": "Haryana",       "avgTariff": 6.5, "topUp": 0, "verify": "UHBVN/DHBVN tariff order; state top-up not confirmed" },
-    "UP": { "name": "Uttar Pradesh", "avgTariff": 6.5, "topUp": 0, "verify": "UPERC tariff order; state top-up not confirmed" },
-    "RJ": { "name": "Rajasthan",     "avgTariff": 7.0, "topUp": 0, "verify": "RERC tariff order" },
-    "GJ": { "name": "Gujarat",       "avgTariff": 5.5, "topUp": 0, "verify": "GERC tariff order" },
-    "MH": { "name": "Maharashtra",   "avgTariff": 9.0, "topUp": 0, "verify": "MERC tariff order" },
-    "KA": { "name": "Karnataka",     "avgTariff": 7.0, "topUp": 0, "verify": "KERC tariff order" },
-    "TN": { "name": "Tamil Nadu",    "avgTariff": 5.5, "topUp": 0, "verify": "TNERC tariff order" }
+    "DL": {
+      "name": "Delhi", "avgTariff": 6.1, "topUpPerKw": 10000, "topUpCap": 30000,
+      "source": "DERC FY 2025-26 slabs Rs 3.00 (0-200), 4.50 (201-400), 6.50 (401-800) plus PPAC of about 36% (BSES/TPDDL). Delhi state top-up Rs 10,000/kW up to Rs 30,000, approved by the Delhi cabinet on 20 May 2025 (Mercom, Tribune). Note: homes under 200 units already get free power, so they save less",
+      "confidence": "medium"
+    },
+    "HR": {
+      "name": "Haryana", "avgTariff": 6.5, "topUpPerKw": 0, "topUpCap": 0,
+      "source": "HERC FY 2025-26 order raised low slabs to Rs 2.20-2.95; higher-slab rates not confirmed (third-party calculators give Rs 6.30-7.10 above 150 units)",
+      "confidence": "low"
+    },
+    "UP": {
+      "name": "Uttar Pradesh", "avgTariff": 6.0, "topUpPerKw": 0, "topUpCap": 0,
+      "source": "UPERC kept 2024-25 rates for 2025; domestic slabs Rs 3.35-6.50, about Rs 6.00 for 151-300 units urban (housing.com, Desi Utility)",
+      "confidence": "medium"
+    },
+    "RJ": {
+      "name": "Rajasthan", "avgTariff": 7.0, "topUpPerKw": 0, "topUpCap": 0,
+      "source": "RERC Oct 2025 order: 301-500 units cut to Rs 7.00, above 500 to Rs 7.50; first 300 units unchanged (Mercom)",
+      "confidence": "medium"
+    },
+    "GJ": {
+      "name": "Gujarat", "avgTariff": 5.5, "topUpPerKw": 0, "topUpCap": 0,
+      "source": "GERC RGP schedule w.e.f. 1 Apr 2025; third-party figures give about Rs 5.00 above 250 units, plus a variable FPPAS surcharge set by formula",
+      "confidence": "low"
+    },
+    "MH": {
+      "name": "Maharashtra", "avgTariff": 9.0, "topUpPerKw": 0, "topUpCap": 0,
+      "source": "MSEDCL: energy charge about Rs 6.1-6.5 for 101-300 units plus wheeling charge, FAC and electricity duty (final MERC review order 25 Mar 2026); sources conflict",
+      "confidence": "low"
+    },
+    "KA": {
+      "name": "Karnataka", "avgTariff": 7.0, "topUpPerKw": 0, "topUpCap": 0,
+      "source": "KERC 3-year order (2025-28) cut domestic energy charge by 10 paise; 201-500 units about Rs 7.0-8.35 by source. Many homes under 200 units get free power (Gruha Jyothi), so they save less",
+      "confidence": "low"
+    },
+    "TN": {
+      "name": "Tamil Nadu", "avgTariff": 5.5, "topUpPerKw": 0, "topUpCap": 0,
+      "source": "TNERC LT I-A, billed every two months, revised 1 Jul 2025 (+3.16%). Slabs rise steeply above 500 units per two months; 2026 scheme rates Rs 4.70 (201-400) and 6.30 (401-500)",
+      "confidence": "low"
+    }
   }
 }

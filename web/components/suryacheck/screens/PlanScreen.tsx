@@ -1,19 +1,21 @@
-import { ArrowRight, Info, LoaderCircle, RefreshCw, Trees, ZoomIn, ZoomOut } from 'lucide-react'
-import { useState } from 'react'
+import { ArrowRight, Info, Landmark, LoaderCircle, Pause, Play, RefreshCw, Trees, ZoomIn, ZoomOut } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Button } from '../Button'
-import { Card, StatCard } from '../Card'
+import { Card, SectionTitle, StatCard } from '../Card'
+import { MonthlyChart } from '../MonthlyChart'
 import { fitRectFor, SatelliteMap, ScaleBar } from '../SatelliteMap'
 import { TiltDiagram } from '../TiltDiagram'
 import { NeighbourLayer, ObstacleLayer, PanelDimension, PanelLayer, RoofOutline, ShadowLayer } from '../MapLayers'
 import { Tag } from '../Tag'
 import { MAP_FILL, SIDE_PANEL, SPLIT, STICKY_MAP_PANEL } from '../layout'
-import { inr, kw, lakhRange, num, yearsRange } from '@/lib/format'
+import type { LoanPlan } from '@/lib/finance'
+import { inr, kw, lakhRange, num, rupeeRange, yearsRange } from '@/lib/format'
 import type { FinanceParams, Point } from '@/lib/mockData'
 import type { PlanModel } from '@/lib/plan'
 import { formatHour, scoreColor, seasonsFor } from '@/lib/solar'
 import type { GeoFrame } from '@/lib/geo'
 import { polygonBounds, toPoints } from '@/lib/geometry'
-import { DEFAULT_PANEL } from '@/lib/plan'
+import { DEFAULT_PANEL, monthlyFromShape } from '@/lib/plan'
 
 /**
  * One fixed framing for the panels: centred on them, at least 14 m wide, and 4:3 like the map,
@@ -40,6 +42,9 @@ export function PlanScreen({
   ownHouse,
   residential,
   subsidyRules,
+  loan,
+  monthlyShape,
+  useKwhMonth,
   onScan,
   onSummary,
 }: {
@@ -57,6 +62,12 @@ export function PlanScreen({
   ownHouse: boolean
   residential: boolean
   subsidyRules: FinanceParams['subsidy']
+  /** EMI next to savings; null when there is nothing to borrow. */
+  loan: LoanPlan | null
+  /** PVGIS kWh per kWp for each month at the chosen tilt; null until it arrives (or if it fails). */
+  monthlyShape: number[] | null
+  /** Household use per month in kWh, drawn as a line on the chart. */
+  useKwhMonth: number | null
   onScan: () => void
   onSummary: () => void
 }) {
@@ -68,8 +79,30 @@ export function PlanScreen({
   const shadows = plan.shadowsAt(hour)
   const eligible = ownHouse && residential
 
+  // "Play the day": sweep the winter sun from 7 am to 5 pm so the shadows move across the roof.
+  const [playing, setPlaying] = useState(false)
+  useEffect(() => {
+    if (!playing) return
+    const DURATION_MS = 7000
+    const from = hour >= 16.9 ? 7 : hour
+    const start = performance.now() - ((from - 7) / 10) * DURATION_MS
+    // A timer rather than requestAnimationFrame: ~25 fps is plenty for shadows, and it keeps going in throttled tabs.
+    const id = setInterval(() => {
+      const t = Math.min(1, (performance.now() - start) / DURATION_MS)
+      onHour(Math.round((7 + 10 * t) * 20) / 20)
+      if (t >= 1) setPlaying(false)
+    }, 40)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing])
+
+  const monthly = monthlyShape ? monthlyFromShape(numbers.kWhFinal, monthlyShape) : null
+
+  const stateNote = subsidyRules.statePerKw > 0
+    ? ` Your state adds ₹${num(subsidyRules.statePerKw)} per kW, up to ₹${num(subsidyRules.stateCap)}.`
+    : ''
   const subsidyNote = eligible
-    ? `₹${num(subsidyRules.perKwFirstTwo)} per kW for the first 2 kW, ₹${num(subsidyRules.thirdKw)} for the 3rd kW, up to ₹${num(subsidyRules.cap)}.`
+    ? `₹${num(subsidyRules.perKwFirstTwo)} per kW for the first 2 kW, ₹${num(subsidyRules.thirdKw)} for the 3rd kW, up to ₹${num(subsidyRules.cap)}.${stateNote}`
     : `No subsidy because ${!ownHouse ? 'the house is not yours' : 'the connection is not residential'}. It needs both.`
 
   return (
@@ -159,9 +192,21 @@ export function PlanScreen({
             max={17}
             step={0.5}
             value={hour}
-            onChange={(e) => onHour(Number(e.target.value))}
-            className="h-12 w-full cursor-pointer accent-sun-dark"
+            onChange={(e) => {
+              setPlaying(false)
+              onHour(Number(e.target.value))
+            }}
+            className="h-10 w-full cursor-pointer accent-sun-dark"
           />
+          <button
+            type="button"
+            onClick={() => setPlaying((p) => !p)}
+            aria-label={playing ? 'Pause the day' : 'Play the day: watch the shadows move from 7 am to 5 pm'}
+            className="flex min-h-11 items-center justify-center gap-1.5 self-start rounded-full bg-teal-deep px-4 text-sm font-bold text-white shadow-md hover:bg-teal-deep/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-sun/40"
+          >
+            {playing ? <Pause className="size-4" aria-hidden="true" /> : <Play className="size-4" aria-hidden="true" />}
+            {playing ? 'Pause' : 'Play the day'}
+          </button>
         </div>
 
         <div className="flex items-center justify-between gap-3">
@@ -266,6 +311,46 @@ export function PlanScreen({
         />
         <StatCard label="Pays back in" value={yearsRange(finance.paybackRange)} note="after subsidy" tag="estimate" />
       </section>
+
+      {loan && (
+        <section aria-label="Paying with a loan" className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-[0_4px_20px_-6px_rgba(120,80,20,0.18)] ring-1 ring-amber-900/5">
+          <SectionTitle tag="estimate">
+            <span className="flex items-center gap-2">
+              <Landmark className="size-5 text-teal-deep" aria-hidden="true" />
+              With a solar loan
+            </span>
+          </SectionTitle>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-sm text-ink-soft">Your EMI</p>
+              <p className="text-2xl font-bold text-ink">{loan.emiRange[0] === loan.emiRange[1] ? inr(loan.emiRange[0]) : rupeeRange(loan.emiRange)}</p>
+              <p className="text-xs text-ink-soft">a month</p>
+            </div>
+            <div>
+              <p className="text-sm text-ink-soft">Your bill goes down by</p>
+              <p className="text-2xl font-bold text-ink">{inr(loan.monthlySavings)}</p>
+              <p className="text-xs text-ink-soft">a month</p>
+            </div>
+          </div>
+          <p className={`rounded-xl p-3 text-sm font-semibold ${loan.paysFromDayOne ? 'bg-teal-soft text-teal-deep' : 'bg-sun-soft text-ink'}`}>
+            {loan.paysFromDayOne
+              ? 'Your savings cover the EMI, so the system pays for itself from the first month.'
+              : `For ${loan.terms.years} years you pay up to ${inr(loan.emiRange[1] - loan.monthlySavings)} a month more than you save. After that, the savings are all yours.`}
+          </p>
+          <p className="text-xs text-ink-soft">
+            PM Surya Ghar collateral-free loan, about {loan.terms.ratePct}% for {loan.terms.years} years, up to {inr(loan.terms.maxAmount)}.
+            Assumes the subsidy pays down the loan when it arrives.
+            {loan.upfrontRange[1] > 0 ? ` You pay up to ${inr(loan.upfrontRange[1])} up front above the loan limit.` : ''} Check the rate with your bank.
+          </p>
+        </section>
+      )}
+
+      {monthly && (
+        <section aria-label="Units made each month" className="flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-[0_4px_20px_-6px_rgba(120,80,20,0.18)] ring-1 ring-amber-900/5">
+          <SectionTitle tag="pvgis">Through the year</SectionTitle>
+          <MonthlyChart kWh={monthly} useKwhMonth={useKwhMonth} />
+        </section>
+      )}
 
       <Card className="flex flex-col gap-2 border-l-4 border-teal-deep bg-teal-soft text-teal-deep">
         <p className="flex items-start gap-2 text-sm font-medium">

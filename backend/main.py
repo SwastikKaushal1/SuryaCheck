@@ -60,7 +60,7 @@ async def on_upstream(_: Request, exc: geo.UpstreamError):
 # ---------- routes ----------
 @app.get("/")
 def root():
-    return {"ok": True, "routes": ["/geocode", "/reverse", "/quick", "/building", "/yield", "/finance", "/reference", "/docs"]}
+    return {"ok": True, "routes": ["/geocode", "/reverse", "/quick", "/monthly", "/building", "/yield", "/finance", "/reference", "/docs"]}
 
 
 @app.get("/health")
@@ -81,6 +81,14 @@ def reverse(lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-
 @app.get("/quick")
 def quick(lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-180, le=180)):
     return {"kwhPerKwp": geo.pvgis_yield(lat, lon, DEFAULT_TILT, 0), "tilt": DEFAULT_TILT, "source": "PVGIS"}
+
+
+@app.get("/monthly")
+def monthly(lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-180, le=180),
+            tilt: int = Query(DEFAULT_TILT, ge=0, le=90), aspect: int = Query(0, ge=-180, le=180)):
+    """Energy per kWp for each month (January first), for the monthly chart."""
+    return {"tilt": tilt, "kwhPerKwp": geo.pvgis_yield(lat, lon, tilt, aspect),
+            "monthly": geo.pvgis_monthly(lat, lon, tilt, aspect), "source": "PVGIS"}
 
 
 @app.get("/building")

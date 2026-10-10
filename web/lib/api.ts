@@ -107,13 +107,29 @@ export interface FinanceResponse {
   tariffUsed: number
   notes: string[]
 }
+export interface LoanTerms {
+  ratePct: number
+  years: number
+  /** Most the scheme lends without collateral, in rupees. */
+  maxAmount: number
+}
+export interface MonthlyResponse {
+  tilt: number
+  kwhPerKwp: number
+  /** kWh per kWp for each month, January first. */
+  monthly: number[]
+  source: string
+}
 export interface ReferenceData {
   panel: { widthM: number; lengthM: number; gapM: number; kWp: number }
   subsidy: { centralPerKwFirst2: number; centralThirdKw: number; centralCap: number; residentialOnly: boolean }
   cost: { firstKwRange: [number, number]; extraKwRange: [number, number] }
   co2: { kgPerKwh: number }
+  /** PM Surya Ghar collateral-free loan. Optional so an older backend still works. */
+  loan?: LoanTerms
   defaults: { avgTariff: number; performanceKwhPerKwp: number }
-  states: Record<string, { name: string; avgTariff: number; topUp: number }>
+  /** avgTariff: rupees per unit on a ~300 units/month household's top slab. topUpPerKw/topUpCap: state subsidy. */
+  states: Record<string, { name: string; avgTariff: number; topUpPerKw?: number; topUpCap?: number }>
 }
 
 export const api = {
@@ -127,6 +143,8 @@ export const api = {
   },
   quick: (lat: number, lon: number, signal?: AbortSignal) =>
     request<{ kwhPerKwp: number; tilt: number; source: string }>(`/quick?lat=${lat}&lon=${lon}`, {}, signal),
+  monthly: (lat: number, lon: number, tilt: number, signal?: AbortSignal) =>
+    request<MonthlyResponse>(`/monthly?lat=${lat}&lon=${lon}&tilt=${tilt}`, {}, signal),
   building: (lat: number, lon: number, signal?: AbortSignal) =>
     request<BuildingResponse>(`/building?lat=${lat}&lon=${lon}`, {}, signal),
   yields: (body: YieldRequest, signal?: AbortSignal) =>

@@ -1,6 +1,6 @@
-import { clamp, convexHull, rectCorners } from './geometry'
+import { clamp, convexHull } from './geometry'
 import type { Obstacle, Point, SkylineStop } from './mockData'
-import { isRound } from './obstacles'
+import { obstacleFootprint } from './obstacles'
 
 export interface Season {
   name: 'winter' | 'equinox' | 'summer'
@@ -45,17 +45,7 @@ export function shadowHull(
   /** Longest shadow to draw. Tanks and rooms are short; tall neighbours need more. */
   maxLengthM = 8,
 ): Point[] {
-  const footprint = isRound(obstacle)
-    ? Array.from({ length: 20 }, (_, i) => {
-        const a = (i / 20) * 2 * Math.PI
-        return { x: obstacle.x + (obstacle.w / 2) * Math.cos(a), y: obstacle.y + (obstacle.h / 2) * Math.sin(a) }
-      })
-    : rectCorners({
-        x: obstacle.x - obstacle.w / 2,
-        y: obstacle.y - obstacle.h / 2,
-        w: obstacle.w,
-        h: obstacle.h,
-      })
+  const footprint = obstacleFootprint(obstacle)
   const lengthM = Math.min(maxLengthM, obstacle.heightM / Math.tan(rad(Math.max(sun.elevation, 6))))
   const lengthUnits = lengthM / metersPerUnit
   const dx = -Math.sin(rad(sun.azimuth)) * lengthUnits
@@ -156,9 +146,11 @@ export function scoreColor(score: number, alpha = 0.62): string {
   return `hsl(${Math.round(s * 125)} 78% 44% / ${alpha})`
 }
 
+/** 13.5 -> "1:30 pm". Rounds to 10 minutes so the clock ticks smoothly while the day plays. */
 export function formatHour(hour: number): string {
-  const h = Math.floor(hour)
-  const m = hour - h >= 0.5 ? '30' : '00'
+  const total = Math.round((hour * 60) / 10) * 10
+  const h = Math.floor(total / 60)
+  const m = String(total % 60).padStart(2, '0')
   const suffix = h >= 12 ? 'pm' : 'am'
   const h12 = h % 12 === 0 ? 12 : h % 12
   return `${h12}:${m} ${suffix}`

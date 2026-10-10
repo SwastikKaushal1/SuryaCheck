@@ -1,9 +1,9 @@
-import { useRef } from 'react'
-import { toPoints } from '@/lib/geometry'
+import { useRef, useState } from 'react'
+import { convexHull, pointInPolygon, polygonBounds, toPoints } from '@/lib/geometry'
 import { neighbourBlock } from '@/lib/neighbours'
 import type { Neighbour, Obstacle, Point } from '@/lib/mockData'
 import { GEO_MPU } from '@/lib/geo'
-import { isRound, presetFor } from '@/lib/obstacles'
+import { isRound, obstacleFootprint, presetFor, rotateAround } from '@/lib/obstacles'
 import { useMapView } from './SatelliteMap'
 
 export function RoofOutline({ points, fillOpacity = 0.28, dashed = false }: { points: Point[]; fillOpacity?: number; dashed?: boolean }) {
@@ -202,6 +202,13 @@ export function EdgeAdder({ at, onAdd, ariaLabel }: { at: Point; onAdd: () => vo
   )
 }
 
+/** How far an item's top is drawn above its foot, in map units, so tall things look tall. */
+export const obstacleRise = (o: Pick<Obstacle, 'kind' | 'heightM'>) => (o.kind === 'clear' ? 0 : Math.max(3, (o.heightM / GEO_MPU) * 0.25))
+
+/** Walls of a standing item: its foot outline pulled straight up the screen. */
+const wallOutline = (foot: Point[], rise: number): Point[] =>
+  convexHull([...foot, ...foot.map((p) => ({ x: p.x, y: p.y - rise }))])
+
 /** Tanks, rooms and the like, drawn as small standing objects. Pass `labels` to name them. */
 export function ObstacleLayer({ obstacles, labels = false }: { obstacles: Obstacle[]; labels?: boolean }) {
   const { scale } = useMapView()
@@ -215,57 +222,63 @@ export function ObstacleLayer({ obstacles, labels = false }: { obstacles: Obstac
       </defs>
       {obstacles.map((o) => {
         const preset = presetFor(o.kind)
-        const rise = Math.max(3, (o.heightM / GEO_MPU) * 0.25)
+        const rise = obstacleRise(o)
         const x0 = o.x - o.w / 2
         const y0 = o.y - o.h / 2
         const fs = 11 / scale
         const clear = o.kind === 'clear'
         const round = isRound(o)
+        const angle = o.angle ?? 0
+        const spin = angle ? `rotate(${angle} ${o.x} ${o.y})` : undefined
         const name = (o.name?.trim() || preset.short).slice(0, 18)
         const wM = +(o.w * GEO_MPU).toFixed(1)
         const lM = +(o.h * GEO_MPU).toFixed(1)
         const dims = round ? `${wM} m wide` : `${wM} × ${lM} m`
         const text = clear ? `${name} · ${dims}` : `${name} · ${o.heightM} m tall · ${dims}`
         const labelW = Math.max(68, text.length * 6.1 + 18)
-        const topY = clear ? y0 : y0 - rise
+        const foot = obstacleFootprint(o)
+        const bb = polygonBounds(foot)
         return (
           <g key={o.id}>
             {clear ? (
-              <>
+              <g transform={spin}>
                 <rect x={x0} y={y0} width={o.w} height={o.h} rx="2" fill={preset.color} opacity="0.28" />
                 <rect x={x0} y={y0} width={o.w} height={o.h} rx="2" fill="none" stroke="#b45309" strokeWidth="1.6" strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />
                 <line x1={x0} y1={y0} x2={x0 + o.w} y2={y0 + o.h} stroke="#b45309" strokeWidth="1" opacity="0.55" vectorEffect="non-scaling-stroke" />
                 <line x1={x0 + o.w} y1={y0} x2={x0} y2={y0 + o.h} stroke="#b45309" strokeWidth="1" opacity="0.55" vectorEffect="non-scaling-stroke" />
-              </>
-            ) : round ? (
-              <>
-                <ellipse cx={o.x} cy={o.y} rx={o.w / 2} ry={o.h / 2} fill={preset.color} />
-                <rect x={x0} y={o.y - rise} width={o.w} height={rise} fill={preset.color} />
-                <rect x={x0} y={o.y - rise} width={o.w} height={rise} fill="url(#sc-wall)" />
-                <ellipse cx={o.x} cy={o.y - rise} rx={o.w / 2} ry={o.h / 2} fill={o.kind === 'tank' ? '#9ad3ee' : preset.color} stroke="#fff" strokeWidth="1.3" vectorEffect="non-scaling-stroke" />
-                <ellipse cx={o.x - o.w * 0.12} cy={o.y - rise - o.h * 0.1} rx={o.w * 0.22} ry={o.h * 0.16} fill="#fff" opacity="0.55" />
-                {o.kind === 'tank' && <circle cx={o.x} cy={o.y - rise} r={Math.max(1.2, o.w * 0.08)} fill="#3b82a8" />}
-              </>
+              </g>
             ) : (
               <>
-                {/* front wall, running from the foot of the room up to its flat roof */}
-                <rect x={x0} y={topY + o.h} width={o.w} height={rise} fill={preset.color} />
-                <rect x={x0} y={topY + o.h} width={o.w} height={rise} fill="url(#sc-wall)" stroke="#fff" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-                {o.kind === 'stairs' && (
+                {/* walls: the foot outline dragged up to the roof of the item */}
+                <polygon points={toPoints(wallOutline(foot, rise))} fill={preset.color} />
+                <polygon points={toPoints(wallOutline(foot, rise))} fill="url(#sc-wall)" stroke="#fff" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+                {o.kind === 'stairs' && !angle && (
                   <g>
-                    <rect x={o.x - o.w * 0.1} y={topY + o.h + rise * 0.3} width={o.w * 0.2} height={rise * 0.7} rx="1" fill="#3b2f25" opacity="0.8" />
-                    <rect x={x0 + o.w * 0.12} y={topY + o.h + rise * 0.28} width={o.w * 0.14} height={rise * 0.26} fill="#bfe3f5" opacity="0.8" />
-                    <rect x={x0 + o.w * 0.74} y={topY + o.h + rise * 0.28} width={o.w * 0.14} height={rise * 0.26} fill="#bfe3f5" opacity="0.8" />
+                    <rect x={o.x - o.w * 0.1} y={y0 + o.h - rise * 0.7} width={o.w * 0.2} height={rise * 0.7} rx="1" fill="#3b2f25" opacity="0.8" />
+                    <rect x={x0 + o.w * 0.12} y={y0 + o.h - rise * 0.72} width={o.w * 0.14} height={rise * 0.26} fill="#bfe3f5" opacity="0.8" />
+                    <rect x={x0 + o.w * 0.74} y={y0 + o.h - rise * 0.72} width={o.w * 0.14} height={rise * 0.26} fill="#bfe3f5" opacity="0.8" />
                   </g>
                 )}
-                {/* flat roof of the room, with a lip around it */}
-                <rect x={x0} y={topY} width={o.w} height={o.h} rx="1.5" fill={preset.color} stroke="#fff" strokeWidth="1.4" vectorEffect="non-scaling-stroke" />
-                <rect x={x0} y={topY} width={o.w} height={o.h} rx="1.5" fill="#fff" opacity="0.16" />
-                <rect x={x0 + o.w * 0.07} y={topY + o.h * 0.1} width={o.w * 0.86} height={o.h * 0.8} fill="none" stroke="#000" strokeOpacity="0.18" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
+                {/* the top of the item */}
+                <g transform={`translate(0 ${-rise})${spin ? ` ${spin}` : ''}`}>
+                  {round ? (
+                    <>
+                      <ellipse cx={o.x} cy={o.y} rx={o.w / 2} ry={o.h / 2} fill={o.kind === 'tank' ? '#9ad3ee' : preset.color} stroke="#fff" strokeWidth="1.3" vectorEffect="non-scaling-stroke" />
+                      <ellipse cx={o.x - o.w * 0.12} cy={o.y - o.h * 0.1} rx={o.w * 0.22} ry={o.h * 0.16} fill="#fff" opacity="0.55" />
+                      {o.kind === 'tank' && <circle cx={o.x} cy={o.y} r={Math.max(1.2, o.w * 0.08)} fill="#3b82a8" />}
+                    </>
+                  ) : (
+                    <>
+                      <rect x={x0} y={y0} width={o.w} height={o.h} rx="1.5" fill={preset.color} stroke="#fff" strokeWidth="1.4" vectorEffect="non-scaling-stroke" />
+                      <rect x={x0} y={y0} width={o.w} height={o.h} rx="1.5" fill="#fff" opacity="0.16" />
+                      <rect x={x0 + o.w * 0.07} y={y0 + o.h * 0.1} width={o.w * 0.86} height={o.h * 0.8} fill="none" stroke="#000" strokeOpacity="0.18" strokeWidth="0.8" vectorEffect="non-scaling-stroke" />
+                    </>
+                  )}
+                </g>
               </>
             )}
             {labels && (
-              <g transform={`translate(${o.x} ${topY - o.h / 2 - 8 / scale})`}>
+              <g transform={`translate(${o.x} ${bb.minY - rise - 12 / scale})`}>
                 <rect x={-labelW / 2 / scale} y={-9 / scale} width={labelW / scale} height={18 / scale} rx={9 / scale} fill="#1f2937" opacity="0.88" />
                 <text y={4 / scale} textAnchor="middle" fontSize={fs} fontWeight="700" fill="#fff">
                   {text}
@@ -279,18 +292,16 @@ export function ObstacleLayer({ obstacles, labels = false }: { obstacles: Obstac
   )
 }
 
-/**
- * Tall neighbours drawn as standing buildings (top face plus a wall rising toward the viewer), with the
- * shadow they cast. When `onChange` is given, drag the building to where it really is and drag the
- * round corner handle to match its footprint.
- */
+/** How high a neighbour's wall is drawn, in screen pixels. */
+export const neighbourRisePx = (floors: number) => Math.min(14 + floors * 7, 64)
+
+/** Tall neighbours drawn as standing buildings (top face plus walls rising toward the viewer), with the shadow they cast. */
 export function NeighbourLayer({
   neighbours,
   roof,
   mpu,
   houseFloors = 0,
   shadows = [],
-  onChange,
 }: {
   neighbours: Neighbour[]
   roof: Point[]
@@ -298,92 +309,253 @@ export function NeighbourLayer({
   houseFloors?: number
   /** Shadow polygons to draw under the buildings. */
   shadows?: Point[][]
-  onChange?: (id: string, rect: NonNullable<Neighbour['rect']>) => void
 }) {
-  const { scale, clientToUnits } = useMapView()
-  const drag = useRef<{ id: string; mode: 'move' | 'size'; dx: number; dy: number } | null>(null)
+  const { scale } = useMapView()
   return (
-    <g>
+    <g pointerEvents="none">
       <ShadowLayer shadows={shadows} />
       {neighbours.map((n) => {
         const o = neighbourBlock(n, roof, mpu, houseFloors)
-        const rise = Math.min(14 + n.floors * 7, 64) / scale // how far the wall climbs on screen
-        const x0 = o.x - o.w / 2
-        const y0 = o.y - o.h / 2
-        const lower = n.floors <= houseFloors
+        const rise = neighbourRisePx(n.floors) / scale
         const fs = 12 / scale
+        const lower = n.floors <= houseFloors
         const label = `${n.floors} ${n.floors === 1 ? 'floor' : 'floors'}`
-        const move = (e: React.PointerEvent, mode: 'move' | 'size') => {
-          if (!onChange) return
-          e.stopPropagation()
-          e.currentTarget.setPointerCapture(e.pointerId)
-          const p = clientToUnits(e.clientX, e.clientY)
-          drag.current = { id: n.id, mode, dx: mode === 'move' ? o.x - p.x : 0, dy: mode === 'move' ? o.y - p.y : 0 }
-        }
-        const onMove = (e: React.PointerEvent) => {
-          const d = drag.current
-          if (!d || d.id !== n.id || !onChange) return
-          const p = clientToUnits(e.clientX, e.clientY)
-          if (d.mode === 'move') onChange(n.id, { x: p.x + d.dx, y: p.y + d.dy, w: o.w, h: o.h })
-          else {
-            const w = Math.max(30, (p.x - x0) )
-            const h = Math.max(30, (p.y - y0))
-            onChange(n.id, { x: x0 + w / 2, y: y0 + h / 2, w, h })
-          }
-        }
-        const end = (e: React.PointerEvent) => {
-          drag.current = null
-          if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
-        }
+        const foot = obstacleFootprint(o)
+        const angle = o.angle ?? 0
         return (
           <g key={n.id} opacity={lower ? 0.55 : 1}>
-            {/* walls: the footprint dragged upward on screen */}
-            <polygon
-              points={toPoints([
-                { x: x0, y: y0 + o.h },
-                { x: x0 + o.w, y: y0 + o.h },
-                { x: x0 + o.w, y: y0 - rise },
-                { x: x0 + o.w, y: y0 - rise + 0 },
-                { x: x0, y: y0 - rise },
-              ])}
-              fill="#0A3F40"
-              stroke="#fff"
-              strokeWidth="1.5"
-              vectorEffect="non-scaling-stroke"
-              strokeLinejoin="round"
-            />
-            {/* top face */}
-            <g
-              pointerEvents={onChange ? 'auto' : 'none'}
-              style={{ touchAction: 'none', cursor: onChange ? 'grab' : undefined }}
-              onPointerDown={(e) => move(e, 'move')}
-              onPointerMove={onMove}
-              onPointerUp={end}
-              onPointerCancel={end}
-            >
-              <rect x={x0} y={y0 - rise} width={o.w} height={o.h} fill="#0F5C5E" stroke="#fff" strokeWidth="2" vectorEffect="non-scaling-stroke" rx={2 / scale} />
-              <rect x={x0} y={y0 - rise} width={o.w} height={o.h} fill="transparent" />
-              <text x={x0 + o.w / 2} y={y0 - rise + o.h / 2 + fs * 0.35} textAnchor="middle" fontSize={fs} fontWeight="800" fill="#fff" pointerEvents="none">
-                {label}
-              </text>
+            <polygon points={toPoints(wallOutline(foot, rise))} fill="#0A3F40" stroke="#fff" strokeWidth="1.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+            <g transform={`translate(0 ${-rise})${angle ? ` rotate(${angle} ${o.x} ${o.y})` : ''}`}>
+              <rect x={o.x - o.w / 2} y={o.y - o.h / 2} width={o.w} height={o.h} fill="#0F5C5E" stroke="#fff" strokeWidth="2" vectorEffect="non-scaling-stroke" rx={2 / scale} />
             </g>
-            {onChange && (
-              <g
-                transform={`translate(${x0 + o.w} ${y0 - rise + o.h})`}
-                pointerEvents="auto"
-                style={{ touchAction: 'none', cursor: 'nwse-resize' }}
-                onPointerDown={(e) => move(e, 'size')}
-                onPointerMove={onMove}
-                onPointerUp={end}
-                onPointerCancel={end}
-              >
-                <circle r={20 / scale} fill="transparent" />
-                <circle r={9 / scale} fill="#fff" stroke="#0F5C5E" strokeWidth={3 / scale} />
+            <text x={o.x} y={o.y - rise + fs * 0.35} textAnchor="middle" fontSize={fs} fontWeight="800" fill="#fff">
+              {label}
+            </text>
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
+/** Something on the map that can be dragged, resized and turned. Sizes are in map units, centre-based. */
+export interface EditItem {
+  id: string
+  x: number
+  y: number
+  w: number
+  h: number
+  angle?: number
+  round?: boolean
+  /** How far its top is drawn above its foot: map units plus screen pixels. */
+  lift: { units: number; px: number }
+  /** Only allow moving it while its centre stays on the roof. */
+  keepOnRoof?: boolean
+}
+type EditPatch = { x: number; y: number; w: number; h: number; angle: number }
+
+/**
+ * Photoshop-style editing. Press an item to select it and drag to move it. A selected item shows
+ * corner handles to resize and a round handle on a stem to turn it.
+ */
+export function ObstacleEditor({
+  items,
+  selectedId,
+  onSelect,
+  onChange,
+  roof,
+  minUnits,
+  maxUnits,
+}: {
+  items: EditItem[]
+  selectedId: string | null
+  onSelect: (id: string | null) => void
+  onChange: (id: string, patch: EditPatch) => void
+  roof: Point[]
+  minUnits: number
+  maxUnits: number
+}) {
+  const { scale, clientToUnits } = useMapView()
+  const drag = useRef<{ id: string; mode: 'move' | 'rotate' | 'size'; dx: number; dy: number; sx: number; sy: number; fixed: Point } | null>(null)
+  const [turning, setTurning] = useState(false)
+  const liftOf = (it: EditItem) => it.lift.units + it.lift.px / scale
+  const baseAt = (e: React.PointerEvent, it: EditItem): Point => {
+    const p = clientToUnits(e.clientX, e.clientY)
+    return { x: p.x, y: p.y + liftOf(it) }
+  }
+  const full = (it: EditItem, over: Partial<EditPatch>): EditPatch => ({ x: it.x, y: it.y, w: it.w, h: it.h, angle: it.angle ?? 0, ...over })
+
+  const start = (e: React.PointerEvent, it: EditItem, mode: 'move' | 'rotate' | 'size', sx = 0, sy = 0) => {
+    e.stopPropagation()
+    e.preventDefault() // stops the browser starting a text or image drag, which would cancel ours
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const p = baseAt(e, it)
+    const c = { x: it.x, y: it.y }
+    const fixed = mode === 'size' ? rotateAround({ x: c.x - (sx * it.w) / 2, y: c.y - (sy * it.h) / 2 }, c, it.angle ?? 0) : c
+    drag.current = { id: it.id, mode, dx: c.x - p.x, dy: c.y - p.y, sx, sy, fixed }
+    if (mode === 'rotate') setTurning(true)
+    if (mode === 'move') onSelect(it.id)
+  }
+  const move = (e: React.PointerEvent, it: EditItem) => {
+    const d = drag.current
+    if (!d || d.id !== it.id) return
+    const p = baseAt(e, it)
+    if (d.mode === 'move') {
+      const np = { x: p.x + d.dx, y: p.y + d.dy }
+      if (it.keepOnRoof && !pointInPolygon(np, roof)) return
+      onChange(it.id, full(it, np))
+    } else if (d.mode === 'rotate') {
+      let a = (Math.atan2(p.y - it.y, p.x - it.x) * 180) / Math.PI + 90
+      a = ((Math.round(a) % 360) + 360) % 360
+      for (const snap of [0, 45, 90, 135, 180, 225, 270, 315, 360]) if (Math.abs(a - snap) <= 4) a = snap % 360
+      onChange(it.id, full(it, { angle: a }))
+    } else {
+      const angle = it.angle ?? 0
+      const v = rotateAround(p, d.fixed, -angle)
+      let w = Math.min(maxUnits, Math.max(minUnits, d.sx * (v.x - d.fixed.x)))
+      let h = Math.min(maxUnits, Math.max(minUnits, d.sy * (v.y - d.fixed.y)))
+      if (it.round) w = h = Math.max(w, h)
+      const centre = rotateAround({ x: d.fixed.x + (d.sx * w) / 2, y: d.fixed.y + (d.sy * h) / 2 }, d.fixed, angle)
+      onChange(it.id, full(it, { x: centre.x, y: centre.y, w, h }))
+    }
+  }
+  const end = (e: React.PointerEvent) => {
+    drag.current = null
+    setTurning(false)
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+  }
+  const handlers = (it: EditItem, mode: 'move' | 'rotate' | 'size', sx = 0, sy = 0) => ({
+    onPointerDown: (e: React.PointerEvent) => start(e, it, mode, sx, sy),
+    onPointerMove: (e: React.PointerEvent) => move(e, it),
+    onPointerUp: end,
+    onPointerCancel: end,
+  })
+
+  return (
+    <g>
+      {items.map((it) => {
+        const lift = liftOf(it)
+        const top = obstacleFootprint({ kind: 'custom', shape: it.round ? 'round' : 'box', x: it.x, y: it.y - lift, w: it.w, h: it.h, angle: it.angle })
+        const selected = it.id === selectedId
+        const angle = it.angle ?? 0
+        const hs = 8 / scale
+        return (
+          <g key={it.id}>
+            <polygon points={toPoints(top)} fill="transparent" pointerEvents="auto" style={{ touchAction: 'none', cursor: selected ? 'move' : 'pointer' }} {...handlers(it, 'move')} />
+            {selected && (
+              <g transform={`translate(${it.x} ${it.y - lift}) rotate(${angle})`}>
+                <rect x={-it.w / 2} y={-it.h / 2} width={it.w} height={it.h} fill="none" stroke="#fff" strokeWidth="1.6" strokeDasharray="5 4" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+                <rect x={-it.w / 2} y={-it.h / 2} width={it.w} height={it.h} fill="none" stroke="#0F5C5E" strokeWidth="1" strokeDasharray="5 4" strokeDashoffset="4.5" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+                <line x1={0} y1={-it.h / 2} x2={0} y2={-it.h / 2 - 26 / scale} stroke="#fff" strokeWidth="1.6" vectorEffect="non-scaling-stroke" pointerEvents="none" />
+                {[
+                  [-1, -1],
+                  [1, -1],
+                  [1, 1],
+                  [-1, 1],
+                ].map(([sx, sy]) => (
+                  <g key={`${sx}${sy}`} transform={`translate(${(sx * it.w) / 2} ${(sy * it.h) / 2})`} pointerEvents="auto" role="button" aria-label="Drag to resize" style={{ touchAction: 'none', cursor: (sx === sy ? 'nwse' : 'nesw') + '-resize' }} {...handlers(it, 'size', sx, sy)}>
+                    <circle r={20 / scale} fill="transparent" />
+                    <rect x={-hs} y={-hs} width={hs * 2} height={hs * 2} rx={2 / scale} fill="#fff" stroke="#0F5C5E" strokeWidth={2.4 / scale} />
+                  </g>
+                ))}
+                <g transform={`translate(0 ${-it.h / 2 - 26 / scale})`} pointerEvents="auto" role="button" aria-label="Drag to turn" style={{ touchAction: 'none', cursor: 'grab' }} {...handlers(it, 'rotate')}>
+                  <circle r={22 / scale} fill="transparent" />
+                  <circle r={10 / scale} fill="#fff" stroke="#0F5C5E" strokeWidth={2.4 / scale} />
+                  <path d={`M${-4.5 / scale} ${1 / scale}A${4.5 / scale} ${4.5 / scale} 0 1 1 ${0.5 / scale} ${4.4 / scale}M${-4.5 / scale} ${-2.4 / scale}V${1 / scale}H${-1.2 / scale}`} fill="none" stroke="#0F5C5E" strokeWidth={1.8 / scale} strokeLinecap="round" strokeLinejoin="round" />
+                  {(turning || angle !== 0) && (
+                    <g transform={`translate(${24 / scale} 0) rotate(${-angle})`} pointerEvents="none" style={{ userSelect: 'none' }}>
+                      <rect x={-17 / scale} y={-9 / scale} width={34 / scale} height={18 / scale} rx={9 / scale} fill="#1f2937" opacity="0.9" />
+                      <text y={4 / scale} textAnchor="middle" fontSize={11 / scale} fontWeight="700" fill="#fff">{Math.round(angle)}°</text>
+                    </g>
+                  )}
+                </g>
               </g>
             )}
           </g>
         )
       })}
+    </g>
+  )
+}
+
+/**
+ * Drag on the roof to draw an item's rectangle (or circle), like a selection tool. A plain tap, or any
+ * touch, just drops one at its usual size. Needs a map that is not itself being dragged.
+ */
+export function DrawLayer({
+  round,
+  mpu,
+  onDraw,
+  onTap,
+}: {
+  round: boolean
+  mpu: number
+  onDraw: (r: { x: number; y: number; w: number; h: number }) => void
+  onTap: (p: Point) => void
+}) {
+  const { scale, clientToUnits } = useMapView()
+  const st = useRef<{ from: Point; cx: number; cy: number; moved: boolean; touch: boolean } | null>(null)
+  const [cur, setCur] = useState<Point | null>(null)
+  const shape = (a: Point, b: Point) => {
+    let w = Math.abs(b.x - a.x)
+    let h = Math.abs(b.y - a.y)
+    if (round) w = h = Math.max(w, h)
+    const sx = b.x >= a.x ? 1 : -1
+    const sy = b.y >= a.y ? 1 : -1
+    return { x: a.x + (sx * w) / 2, y: a.y + (sy * h) / 2, w, h }
+  }
+  const draft = st.current?.moved && cur ? shape(st.current.from, cur) : null
+  const end = (e: React.PointerEvent, cancelled: boolean) => {
+    const s = st.current
+    st.current = null
+    setCur(null)
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+    if (!s || cancelled) return
+    const p = clientToUnits(e.clientX, e.clientY)
+    if (s.moved) onDraw(shape(s.from, p))
+    else onTap(s.from)
+  }
+  const pill = draft ? `${(draft.w * mpu).toFixed(1)} × ${(draft.h * mpu).toFixed(1)} m` : ''
+  return (
+    <g>
+      <rect
+        x={-20000}
+        y={-20000}
+        width={40000}
+        height={40000}
+        fill="transparent"
+        pointerEvents="auto"
+        style={{ cursor: 'crosshair', touchAction: 'pan-y pinch-zoom' }}
+        onPointerDown={(e) => {
+          const touch = e.pointerType === 'touch'
+          if (!touch) {
+            e.preventDefault()
+            e.currentTarget.setPointerCapture(e.pointerId)
+          }
+          st.current = { from: clientToUnits(e.clientX, e.clientY), cx: e.clientX, cy: e.clientY, moved: false, touch }
+        }}
+        onPointerMove={(e) => {
+          const s = st.current
+          if (!s || s.touch) return
+          if (!s.moved && Math.hypot(e.clientX - s.cx, e.clientY - s.cy) > 6) s.moved = true
+          if (s.moved) setCur(clientToUnits(e.clientX, e.clientY))
+        }}
+        onPointerUp={(e) => end(e, false)}
+        onPointerCancel={(e) => end(e, true)}
+      />
+      {draft && (
+        <g pointerEvents="none">
+          {round ? (
+            <ellipse cx={draft.x} cy={draft.y} rx={draft.w / 2} ry={draft.h / 2} fill="#fff" fillOpacity="0.2" stroke="#fff" strokeWidth="2" strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
+          ) : (
+            <rect x={draft.x - draft.w / 2} y={draft.y - draft.h / 2} width={draft.w} height={draft.h} fill="#fff" fillOpacity="0.2" stroke="#fff" strokeWidth="2" strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
+          )}
+          <g transform={`translate(${draft.x} ${draft.y - draft.h / 2 - 14 / scale})`} style={{ userSelect: 'none' }}>
+            <rect x={-(pill.length * 3.4 + 9) / scale} y={-9 / scale} width={(pill.length * 6.8 + 18) / scale} height={18 / scale} rx={9 / scale} fill="#1f2937" opacity="0.9" />
+            <text y={4 / scale} textAnchor="middle" fontSize={11 / scale} fontWeight="700" fill="#fff">{pill}</text>
+          </g>
+        </g>
+      )}
     </g>
   )
 }
