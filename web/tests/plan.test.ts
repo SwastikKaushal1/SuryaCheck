@@ -192,4 +192,13 @@ const winterPath = sunPaths(towerHorizon, 28.6)[0].points
 const hidden = blockedRanges(winterPath)
 ok(hidden.length === 1 && hidden[0][0] > 8.5 && hidden[0][1] < 12, `a tall block to the south-south-east hides the winter sun only for a while in the morning (${hidden.map(([a, b]) => `${a}-${b}`).join(', ')})`)
 ok(blockedRanges(sunPaths(Array(36).fill(3), 28.6)[1].points).length === 0, 'open sky: the equinox sun is never hidden')
+// verdict: an honest "don't go solar" when the deal is clearly bad
+import { solarVerdict } from '../lib/plan'
+const nums = (kWp: number, kWh: number) => ({ panelsFit: 10, panelsFinal: Math.round(kWp / 0.55), kWp, kWhBefore: kWh, kWhFinal: kWh, limitedBy: 'bill' as const, coverage: 1 })
+const good = solarVerdict(nums(3, 4400), { paybackRange: [4, 6], savingsYearRange: [35000, 35000] })
+ok(good.recommend && good.reasons.length === 0, 'a sunny roof paying back in 4-6 years is recommended')
+const shaded = solarVerdict(nums(14.3, 12910), { paybackRange: [8, 12], savingsYearRange: [78000, 78000] })
+ok(!shaded.recommend && shaded.reasons.length === 2, `8-12 years and ~900 units per kW: not recommended (${shaded.reasons.length} reasons)`)
+ok(!solarVerdict(nums(0.55, 800), { paybackRange: [5, 6], savingsYearRange: [6000, 6000] }).recommend, 'room for one panel only: not recommended')
+ok(solarVerdict(nums(3, 4400), { paybackRange: [7, 9], savingsYearRange: [30000, 30000] }).recommend, '7-9 years on an open roof is slow but still OK')
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED'); process.exit(fails ? 1 : 0)

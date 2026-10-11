@@ -1,4 +1,4 @@
-import { ArrowRight, Info, Landmark, LoaderCircle, Pause, Play, RefreshCw, Trees, ZoomIn, ZoomOut } from 'lucide-react'
+import { ArrowRight, Eye, Info, ThumbsDown, Landmark, LoaderCircle, Pause, Play, RefreshCw, Trees, ZoomIn, ZoomOut } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Button } from '../Button'
 import { Card, SectionTitle, StatCard } from '../Card'
@@ -15,7 +15,7 @@ import type { PlanModel } from '@/lib/plan'
 import { compassName, formatHour, horizonAt, scoreColor, seasonsFor, sunPosition } from '@/lib/solar'
 import type { GeoFrame } from '@/lib/geo'
 import { polygonBounds, toPoints } from '@/lib/geometry'
-import { DEFAULT_PANEL, monthlyFromShape } from '@/lib/plan'
+import { DEFAULT_PANEL, monthlyFromShape, solarVerdict } from '@/lib/plan'
 
 /**
  * One fixed framing for the panels: centred on them, at least 14 m wide, and 4:3 like the map,
@@ -85,6 +85,11 @@ export function PlanScreen({
   const skylineHere = skylineHorizon ? horizonAt(skylineHorizon, winterSun.azimuth) : 0
   const sunHidden = skylineHere > 3.5 && winterSun.elevation < skylineHere
   const eligible = ownHouse && residential
+  // A clearly bad deal gets an honest "don't" first; the plan is one tap away if they still want it.
+  // Wait for the exact sunshine numbers so the advice doesn't flip when they arrive.
+  const verdict = solarVerdict(numbers, finance)
+  const [showAnyway, setShowAnyway] = useState(false)
+  const advise = !verdict.recommend && sunStatus !== 'loading'
 
   // "Play the day": sweep the winter sun from 7 am to 5 pm so the shadows move across the roof.
   const [playing, setPlaying] = useState(false)
@@ -255,6 +260,44 @@ export function PlanScreen({
       </div>
 
       <div className={SIDE_PANEL}>
+      {advise && !showAnyway ? (
+        <>
+          <section aria-label="Our advice" className="flex flex-col gap-3 rounded-3xl bg-red-700 p-5 text-white shadow-[0_14px_30px_-14px_rgba(185,28,28,0.9)]" role="alert">
+            <ThumbsDown className="size-9" aria-hidden="true" />
+            <h1 className="text-3xl font-bold leading-tight">We don&apos;t recommend solar for this roof</h1>
+            <ul className="flex list-disc flex-col gap-2 pl-5 text-base text-white/95">
+              {verdict.reasons.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+            <p className="text-sm text-white/85">Panels last about 25 years, and the inverter usually needs replacing once along the way. With numbers like these, the money is better kept.</p>
+          </section>
+          <Card className="flex flex-col gap-2 text-ink">
+            <p className="text-base font-semibold">Think something is off?</p>
+            <p className="text-sm text-ink-soft">A wrong roof outline, a tank marked in the wrong place, or a skyline scan taken from the wrong spot can make the numbers look worse than they are.</p>
+          </Card>
+          <div className="flex flex-col gap-3">
+            <Button variant="secondary" onClick={onScan}>
+              <Trees className="size-5" aria-hidden="true" />
+              Check the shade from surroundings again
+            </Button>
+            <Button variant="ghost" onClick={() => setShowAnyway(true)}>
+              <Eye className="size-5" aria-hidden="true" />
+              Show me the plan anyway
+            </Button>
+          </div>
+        </>
+      ) : (
+      <>
+      {advise && (
+        <Card className="flex flex-col gap-1 border-l-4 border-red-600 bg-red-50 text-red-900" role="status">
+          <p className="flex items-center gap-2 text-base font-bold">
+            <ThumbsDown className="size-5 shrink-0" aria-hidden="true" />
+            We don&apos;t recommend solar here
+          </p>
+          <p className="text-sm">{verdict.reasons[0]}</p>
+        </Card>
+      )}
       <div className="flex flex-col gap-1 max-lg:-order-1">
         <h1 className="text-2xl font-bold text-ink lg:text-3xl">Your solar plan</h1>
         <p className="text-base text-ink-soft">
@@ -397,6 +440,8 @@ export function PlanScreen({
           <ArrowRight className="size-5" aria-hidden="true" />
         </Button>
       </div>
+      </>
+      )}
       </div>
     </div>
   )
