@@ -293,6 +293,67 @@ export function CornerHandle({ point, label, onMove, ariaLabel }: { point: Point
   )
 }
 
+/**
+ * A "move" handle in the middle of an outline: drag it and the whole shape slides together,
+ * keeping its size and corners (for when a map outline is the right shape but sits off the roof).
+ */
+export function OutlineMover({ points, onMove, ariaLabel = 'Move the whole outline. Drag to slide it onto your roof.' }: { points: Point[]; onMove: (points: Point[]) => void; ariaLabel?: string }) {
+  const { scale, clientToUnits } = useMapView()
+  const start = useRef<{ at: Point; points: Point[] } | null>(null)
+  if (points.length < 3) return null
+  const c = { x: points.reduce((s, p) => s + p.x, 0) / points.length, y: points.reduce((s, p) => s + p.y, 0) / points.length }
+  const r = 17 / scale
+  const arrow = 9 / scale
+  return (
+    <g
+      transform={`translate(${c.x} ${c.y})`}
+      pointerEvents="auto"
+      role="button"
+      aria-label={ariaLabel}
+      style={{ touchAction: 'none', cursor: 'move' }}
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        start.current = { at: clientToUnits(e.clientX, e.clientY), points }
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId)
+        } catch {
+          // Pointer already gone; the drag still works while it stays over the handle.
+        }
+      }}
+      onPointerMove={(e) => {
+        const s = start.current
+        if (!s) return
+        const now = clientToUnits(e.clientX, e.clientY)
+        const dx = now.x - s.at.x
+        const dy = now.y - s.at.y
+        onMove(s.points.map((p) => ({ x: p.x + dx, y: p.y + dy })))
+      }}
+      onPointerUp={(e) => {
+        start.current = null
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+      }}
+      onPointerCancel={() => {
+        start.current = null
+      }}
+    >
+      <circle r={28 / scale} fill="transparent" />
+      <circle r={r} fill="#0F5C5E" stroke="#fff" strokeWidth={3 / scale} />
+      {/* four-way arrow */}
+      <g stroke="#fff" strokeWidth={2.4 / scale} strokeLinecap="round" strokeLinejoin="round" fill="none">
+        <line x1={-arrow} x2={arrow} y1="0" y2="0" />
+        <line y1={-arrow} y2={arrow} x1="0" x2="0" />
+        <polyline points={`${-arrow + 3.5 / scale},${-3.5 / scale} ${-arrow},0 ${-arrow + 3.5 / scale},${3.5 / scale}`} />
+        <polyline points={`${arrow - 3.5 / scale},${-3.5 / scale} ${arrow},0 ${arrow - 3.5 / scale},${3.5 / scale}`} />
+        <polyline points={`${-3.5 / scale},${-arrow + 3.5 / scale} 0,${-arrow} ${3.5 / scale},${-arrow + 3.5 / scale}`} />
+        <polyline points={`${-3.5 / scale},${arrow - 3.5 / scale} 0,${arrow} ${3.5 / scale},${arrow - 3.5 / scale}`} />
+      </g>
+      <text y={(r + 13) / 1 / scale} textAnchor="middle" fontSize={11 / scale} fontWeight="800" fill="#fff" stroke="#0b3d3f" strokeWidth={3 / scale} paintOrder="stroke" pointerEvents="none">
+        Move
+      </text>
+    </g>
+  )
+}
+
 /** Small "+" on an edge's midpoint. Tapping it adds a corner there. */
 export function EdgeAdder({ at, onAdd, ariaLabel }: { at: Point; onAdd: () => void; ariaLabel: string }) {
   const { scale } = useMapView()

@@ -2,7 +2,7 @@ import { RotateCcw, Undo2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Button } from '../Button'
 import { Card } from '../Card'
-import { CornerHandle, EdgeLengths, RoofOutline } from '../MapLayers'
+import { CornerHandle, EdgeLengths, OutlineMover, RoofOutline } from '../MapLayers'
 import { NumberField } from '../NumberField'
 import { DEFAULT_FIT, fitRectFor, SatelliteMap } from '../SatelliteMap'
 import { Segmented } from '../Segmented'
@@ -61,6 +61,7 @@ export function RoofFallback({ frame, reason, onUse }: { frame: GeoFrame; reason
               {corners.map((c, i) => (
                 <CornerHandle key={i} point={c} label={String(i + 1)} ariaLabel={`Roof corner ${i + 1}. Drag to move.`} onMove={(p) => setCorners((list) => list.map((q, k) => (k === i ? p : q)))} />
               ))}
+              {corners.length >= 3 && <OutlineMover points={corners} onMove={setCorners} />}
             </SatelliteMap>
             <p className="text-base font-medium text-ink" aria-live="polite">
               {corners.length === 0 ? 'Tap the first corner of your roof. Use + to zoom in.' : corners.length < 3 ? `${corners.length} marked. Tap ${3 - corners.length} more corner${corners.length === 2 ? '' : 's'} and the shape closes by itself.` : `${corners.length} corners, shape closed. Tap to add more, or drag any corner to fine-tune.`}
@@ -87,7 +88,7 @@ export function RoofFallback({ frame, reason, onUse }: { frame: GeoFrame; reason
 
         {method === 'tap' ? (
           <Card className="flex flex-col gap-3">
-            <p className="text-sm text-ink-soft">Tap around the edge of your roof, one corner after another. Use as many corners as the roof needs. The outline closes by itself, so there is no last point to find.</p>
+            <p className="text-sm text-ink-soft">Tap around the edge of your roof, one corner after another. Use as many corners as the roof needs. The outline closes by itself, so there is no last point to find. To slide the whole shape, drag the Move handle in the middle.</p>
             <div className="grid grid-cols-2 gap-2">
               <Button variant="ghost" onClick={() => setCorners((c) => c.slice(0, -1))} disabled={corners.length === 0} className="min-h-12">
                 <Undo2 className="size-4" aria-hidden="true" />
