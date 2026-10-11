@@ -1,7 +1,8 @@
-import { ArrowRight, Building2, Check, FileText, Home, IndianRupee, LoaderCircle, LocateFixed, MapPin, PencilRuler, Search, Sun, Zap } from 'lucide-react'
+import { ArrowRight, Building2, Check, FileText, Home, Scale, ScanLine, Smartphone, IndianRupee, LoaderCircle, LocateFixed, MapPin, PencilRuler, Search, Sun, Zap } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../Button'
 import { MapPlaceholder } from '../MapPlaceholder'
+import { PhoneScanMock } from './skyline/PhoneScanMock'
 import { api, isAbort, toApiError, type Place } from '@/lib/api'
 import { toPoints } from '@/lib/geometry'
 import { sampleRoof } from '@/lib/mockData'
@@ -10,13 +11,16 @@ const FEATURES: { icon: typeof Home; title: string; text: string; fact?: string;
   { icon: Home, title: 'Roof-aware', text: 'We outline your roof and place panels around tanks, rooms and trees.', fact: 'Panels drawn to scale' },
   { icon: Zap, title: 'Sized to your bill', text: 'Only as many panels as you will use, not as many as fit.', fact: 'Fits your bill, not your roof' },
   { icon: IndianRupee, title: 'Subsidy included', text: 'PM Surya Ghar subsidy is worked out for you, not left as homework.', count: 78000 },
-  { icon: Building2, title: 'Shade counted', text: 'Mark taller buildings next door and we count the shade they cast.', fact: 'Checked across 3 seasons' },
+  { icon: Building2, title: 'Shade counted', text: 'Tanks, stair rooms, taller neighbours, and the trees and towers around you.', fact: 'Checked across 3 seasons' },
+  { icon: Smartphone, title: 'Your phone is the scanner', text: 'Trace the skyline with your phone camera. Planning on a laptop? Scan a QR code and the readings appear there.', fact: 'About 30 seconds' },
+  { icon: Scale, title: 'Honest advice', text: 'If solar will not pay off on your roof, we tell you so before showing any plan.', fact: 'No sales pitch' },
 ]
 
 const STEPS = [
   { icon: MapPin, title: 'Find your house', text: 'Search your address or use your location, then confirm your roof on the satellite map.' },
   { icon: PencilRuler, title: 'Mark what is on the roof', text: 'Water tanks, stair rooms, trees and taller neighbours, with their real sizes and heights.' },
-  { icon: Sun, title: 'Get your plan', text: 'Panels sized to your bill, the best tilt for your roof, and real sunshine data for your spot.' },
+  { icon: ScanLine, title: 'Scan your surroundings', text: 'Stand where the panels will go and sweep your phone across the buildings and trees. We show when they hide the sun.' },
+  { icon: Sun, title: 'Get an honest plan', text: 'Panels sized to your bill at the best tilt, with real sunshine data. If solar will not pay off, we say so.' },
   { icon: FileText, title: 'Take it to an installer', text: 'Download a PDF report or share it on WhatsApp, with the questions to ask every installer.' },
 ]
 
@@ -24,6 +28,8 @@ const DATA = [
   { name: 'PVGIS (EU Joint Research Centre)', use: 'Sunshine and yearly energy for your exact location' },
   { name: 'OpenStreetMap', use: 'Addresses and building outlines' },
   { name: 'Esri World Imagery', use: 'Satellite pictures of your roof' },
+  { name: 'Photon (Komoot)', use: 'Address suggestions as you type' },
+  { name: "Your phone's camera and compass", use: 'The skyline you trace. Only angles are sent, never the video.' },
   { name: 'PM Surya Ghar rules', use: 'Central subsidy: ₹30,000 per kW for 2 kW, ₹18,000 for the 3rd' },
 ]
 
@@ -96,6 +102,14 @@ function StepScene({ i }: { i: number }) {
       </svg>
     )
   if (i === 2)
+    return (
+      <svg viewBox="0 0 120 112" className={common} aria-hidden="true">
+        {/* the street behind, and the phone running our scan screen in front of it */}
+        <path d="M-60 112 V80 H-36 V58 H-10 V74 H4 V44 L10 28 L16 44 V74 H36 V70 H84 V60 H110 V52 H136 V76 H180 V112 Z" fill="#0f5c5e" opacity=".22" />
+        <PhoneScanMock className="drop-shadow-md" transform="translate(30 2)" />
+      </svg>
+    )
+  if (i === 3)
     return (
       <svg viewBox="0 0 200 90" className={common} aria-hidden="true">
         <g className="hs-sun">
@@ -175,7 +189,7 @@ const PREVIEW_PANELS = Array.from({ length: 8 }, (_, i) => ({ x: 162 + (i % 4) *
 function AnimatedPreview() {
   return (
     <MapPlaceholder
-      ariaLabel="Animated sample: a roof is outlined, a water tank and stair room appear with their shadows, then eight solar panels are placed"
+      ariaLabel="Animated sample: a roof is outlined, a water tank and stair room appear with their shadows, the buildings around are traced with a phone, then eight solar panels are placed"
       label="Sample preview"
       className="lg:aspect-[5/4] lg:rounded-3xl"
     >
@@ -201,6 +215,16 @@ function AnimatedPreview() {
         <polygon className="sp-shadow" points="128,120 152,120 172,96 148,96" fill="#0b1a12" />
         <polygon className="sp-shadow" points="232,104 278,104 300,86 254,86" fill="#0b1a12" />
 
+        {/* the surroundings to the south, traced by the phone sweep */}
+        <g className="sp-sky">
+          <path d="M0 300 V268 H34 V250 H70 V266 H96 V238 L102 222 L108 238 V266 H150 A20 20 0 0 1 190 262 V256 H236 V246 H272 V262 H312 V252 H350 V270 H400 V300 Z" fill="#0f5c5e" fillOpacity="0.8" />
+        </g>
+        <path className="sp-trace" pathLength={100} d="M0 268 H34 V250 H70 V266 H96 V238 L102 222 L108 238 V266 H150 A20 20 0 0 1 190 262 V256 H236 V246 H272 V262 H312 V252 H350 V270 H400" fill="none" stroke="#FBBF24" strokeWidth="3" strokeLinejoin="round" />
+        {/* the phone doing the sweep, as on our real scan screen */}
+        <g className="sp-phone">
+          <PhoneScanMock dur={3} transform="translate(322 112) scale(.95)" />
+        </g>
+
         {/* water tank and staircase room */}
         <g className="sp-obs">
           <ellipse cx="140" cy="120" rx="13" ry="13" fill="#4f9bbf" />
@@ -224,7 +248,7 @@ function AnimatedPreview() {
       <foreignObject x="0" y="0" width="400" height="300" pointerEvents="none">
         <div className="relative size-full">
           <div className="absolute left-3 top-3 grid rounded-full bg-white/95 px-3 py-1 text-[11px] font-bold text-ink shadow">
-            {['1. Find the roof', '2. Mark tank and room', '3. Work out the shade', '4. Place the panels'].map((t, i) => (
+            {['1. Find the roof', '2. Mark tank and room', '3. Scan the skyline', '4. Place the panels'].map((t, i) => (
               <span key={t} className={`sp-cap sp-cap-${i + 1} col-start-1 row-start-1`}>
                 {t}
               </span>
@@ -493,18 +517,18 @@ export function Landing({ onPlace }: { onPlace: (place: Place) => void }) {
 
       <section id="how-it-works" className="flex scroll-mt-24 flex-col gap-6" aria-label="How it works">
         <Reveal>
-          <SectionHead eyebrow="How it works" title="Four steps, about three minutes" />
+          <SectionHead eyebrow="How it works" title="Five steps, about three minutes" />
         </Reveal>
         <Reveal className="relative">
-          <div aria-hidden="true" className="absolute left-[12%] right-[12%] top-[68px] hidden lg:block">
+          <div aria-hidden="true" className="absolute left-[10%] right-[10%] top-[84px] hidden lg:block">
             <span className="step-line block h-0.5 rounded bg-gradient-to-r from-sun via-sun-dark to-teal-deep" />
             <span className="step-dot absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-sun shadow-[0_0_0_4px_rgba(245,158,11,0.25)]" />
           </div>
-          <ol className="relative grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <ol className="relative grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {STEPS.map(({ icon: Icon, title, text }, i) => (
               <Reveal as="li" key={title} delay={i * 120} className="group">
                 <div className="step-glow flex h-full flex-col gap-3 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-amber-900/5 transition duration-300 hover:shadow-lg" style={{ animationDelay: `${i * 2}s` }}>
-                  <div className="h-24 overflow-hidden rounded-xl bg-gradient-to-br from-sun-soft/70 to-sand/70">
+                  <div className="h-32 overflow-hidden rounded-xl bg-gradient-to-br from-sun-soft/70 to-sand/70">
                     <StepScene i={i} />
                   </div>
                   <div className="flex items-center gap-3">
@@ -524,7 +548,7 @@ export function Landing({ onPlace }: { onPlace: (place: Place) => void }) {
         <Reveal>
           <SectionHead eyebrow="What you get" title="A plan you can check, not a sales pitch" />
         </Reveal>
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map(({ icon: Icon, title, text, fact, count }, i) => (
             <Reveal
               as="li"

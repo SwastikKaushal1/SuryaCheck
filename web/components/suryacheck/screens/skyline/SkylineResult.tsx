@@ -1,12 +1,15 @@
-import { Plus, RotateCcw, Trash2 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { Camera, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { PairWithPhone } from './PairWithPhone'
+import { SweepDemo } from './SweepDemo'
+import { askMotionPermission, canPhoneScan, PhoneScan } from './PhoneScan'
 import { Button } from '../../Button'
 import { Card, SectionTitle } from '../../Card'
 import { NumberField } from '../../NumberField'
 import { Tag } from '../../Tag'
 import { clamp } from '@/lib/geometry'
 import type { Neighbour, SkylineStop } from '@/lib/mockData'
-import { horizonAt, horizonFromStops, skylineLossPct, tallestDirection } from '@/lib/solar'
+import { applyScan, blockedRanges, formatHour, horizonAt, horizonFromStops, skylineLossPct, sunPaths, tallestDirection } from '@/lib/solar'
 import { cn } from '@/lib/utils'
 
 const W = 340
@@ -33,7 +36,10 @@ const listSides = (sides: Neighbour['side'][]) => {
   return `${joined} side${words.length > 1 ? 's' : ''}`
 }
 
-const xOf = (bearing: number) => LEFT + ((bearing - 90) / 180) * (RIGHT - LEFT)
+/** The chart spans the whole sun track over India: summer sunrise (~63°) to summer sunset (~297°). */
+const FROM = 60
+const TO = 300
+const xOf = (bearing: number) => LEFT + ((bearing - FROM) / (TO - FROM)) * (RIGHT - LEFT)
 const yOf = (elev: number) => BOTTOM - (elev / MAX_ELEV) * (BOTTOM - TOP)
 
 export function SkylineResult({
@@ -44,7 +50,14 @@ export function SkylineResult({
   onChange,
   onReset,
   onApply,
+  onSkip,
+  latitude = 28.6,
+  standHere,
 }: {
+  /** Map of where the panels will go, so the person knows where to stand for the scan. */
+  standHere?: ReactNode
+  /** House latitude, for the sun's paths on the chart (Delhi if unknown). */
+  latitude?: number
   stops: SkylineStop[]
   baseHorizon: number[]
   /** Drops the parts of the skyline already counted as tall neighbours. */
@@ -53,10 +66,33 @@ export function SkylineResult({
   onChange: (stops: SkylineStop[]) => void
   onReset: () => void
   onApply: () => void
+  /** Leave without adding skyline shade. */
+  onSkip?: () => void
 }) {
   const [selectedId, setSelectedId] = useState(stops[0]?.id ?? '')
   const svgRef = useRef<SVGSVGElement>(null)
   const dragging = useRef<string | null>(null)
+
+  // Phone scan: only offered on touch phones with motion sensors (decided after mount, never on the server).
+  const [scanAvailable, setScanAvailable] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [scanNote, setScanNote] = useState('')
+  useEffect(() => setScanAvailable(canPhoneScan()), [])
+  const startScan = async () => {
+    setScanNote('')
+    // Asking shows the iPhone prompt. Whatever the answer, open the scanner: it tells the person
+    // within a few seconds if no motion readings arrive, so a wrong "denied" can never block a phone that works.
+    await askMotionPermission()
+    setScanning(true)
+  }
+  const finishScan = (marks: { bearing: number; elevation: number }[]) => {
+    setScanning(false)
+    const next = applyScan(stops, marks, baseHorizon)
+    onChange(next)
+    setScanNote(
+      `Skyline scanned: ${next.length} points. The sun's paths on the chart turn red where your surroundings hide the sun; drag any point that looks off.`,
+    )
+  }
 
   const sorted = [...stops].sort((a, b) => a.bearing - b.bearing)
   const horizon = horizonFromStops(baseHorizon, stops)
@@ -65,11 +101,15 @@ export function SkylineResult({
   const lossPct = skylineLossPct(counted)
   const direction = tallestDirection(counted)
   const selected = stops.find((s) => s.id === selectedId) ?? sorted[0]
+  // A phone sweep gives many points: draw them small and skip the long list of direction buttons.
+  const dense = stops.length > MAX_STOPS
+  // Where the sun travels on three days of the year, and when the skyline hides it.
+  const paths = sunPaths(horizon, latitude)
 
   const path = (() => {
-    let d = `M${xOf(90)} ${BOTTOM}`
-    for (let b = 90; b <= 270; b += 10) d += ` L${xOf(b)} ${yOf(horizon[b / 10])}`
-    return `${d} L${xOf(270)} ${BOTTOM} Z`
+    let d = `M${xOf(FROM)} ${BOTTOM}`
+    for (let b = FROM; b <= TO; b += 10) d += ` L${xOf(b)} ${yOf(horizon[b / 10])}`
+    return `${d} L${xOf(TO)} ${BOTTOM} Z`
   })()
 
   const setElevation = (id: string, elevation: number) =>
@@ -84,7 +124,7 @@ export function SkylineResult({
 
   const addStop = () => {
     if (stops.length >= MAX_STOPS) return
-    const bearings = [90, ...sorted.map((s) => s.bearing), 270]
+    const bearings = [FROM, ...sorted.map((s) => s.bearing), TO]
     let best = { gap: 0, at: 180 }
     for (let i = 0; i < bearings.length - 1; i++) {
       const gap = bearings[i + 1] - bearings[i]
@@ -143,6 +183,42 @@ export function SkylineResult({
             </g>
           ))}
           <path d={path} fill="#0F5C5E" fillOpacity="0.85" stroke="#0a3d3f" strokeWidth="1.5" strokeLinejoin="round" />
+          {/* the sun's paths: amber where it shines on you, red where your surroundings hide it */}
+          <g pointerEvents="none">
+            {paths.map(({ season, points }) => {
+              const dash = season.name === 'winter' ? undefined : season.name === 'equinox' ? '4 3' : '1.5 3'
+              const visible = (p: { azimuth: number; elevation: number }) => p.azimuth >= FROM && p.azimuth <= TO && p.elevation <= MAX_ELEV
+              return points.slice(1).map((p, i) => {
+                const a = points[i]
+                if (!visible(a) || !visible(p)) return null
+                return (
+                  <line
+                    key={`${season.name}-${i}`}
+                    x1={xOf(a.azimuth)}
+                    y1={yOf(a.elevation)}
+                    x2={xOf(p.azimuth)}
+                    y2={yOf(p.elevation)}
+                    stroke={a.blocked || p.blocked ? '#DC2626' : '#D97706'}
+                    strokeWidth={season.name === 'winter' ? 2.4 : 1.8}
+                    strokeDasharray={dash}
+                    strokeLinecap="round"
+                  />
+                )
+              })
+            })}
+            {/* hour marks on the winter path, the one that matters most */}
+            {paths[0].points
+              .filter((p) => Number.isInteger(p.hour) && p.hour % 2 === 0 && p.azimuth >= FROM && p.azimuth <= TO)
+              .map((p) => (
+                <g key={p.hour}>
+                  <circle cx={xOf(p.azimuth)} cy={yOf(p.elevation)} r="2.2" fill={p.blocked ? '#DC2626' : '#D97706'} />
+                  <text x={xOf(p.azimuth)} y={yOf(p.elevation) - 5} textAnchor="middle" fontSize="7.5" fontWeight="700" fill="#6b5b45">
+                    {p.hour > 12 ? p.hour - 12 : p.hour}
+                    {p.hour >= 12 ? 'pm' : 'am'}
+                  </text>
+                </g>
+              ))}
+          </g>
           {[
             [90, 'E'],
             [135, 'SE'],
@@ -191,14 +267,14 @@ export function SkylineResult({
                 }}
                 className="cursor-grab outline-none focus-visible:[&>circle:last-of-type]:stroke-[4px]"
               >
-                <circle cx={xOf(s.bearing)} cy={yOf(s.elevation)} r="20" fill="transparent" />
+                <circle cx={xOf(s.bearing)} cy={yOf(s.elevation)} r={dense ? 8 : 20} fill="transparent" />
                 <circle
                   cx={xOf(s.bearing)}
                   cy={yOf(s.elevation)}
-                  r={active ? 9 : 7}
+                  r={dense ? (active ? 6 : 3.5) : active ? 9 : 7}
                   fill={edited ? '#F59E0B' : '#fff'}
                   stroke={active ? '#2b2118' : '#F59E0B'}
-                  strokeWidth="2.5"
+                  strokeWidth={dense ? 1.5 : 2.5}
                 />
               </g>
             )
@@ -207,9 +283,51 @@ export function SkylineResult({
             Looking from east to west, height of buildings and trees
           </text>
         </svg>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-soft" aria-hidden="true">
+          <span className="flex items-center gap-1.5"><span className="h-0.5 w-5 bg-sun-dark" /> Winter sun</span>
+          <span className="flex items-center gap-1.5"><span className="h-0.5 w-5 border-t-2 border-dashed border-sun-dark" /> March / Sept</span>
+          <span className="flex items-center gap-1.5"><span className="h-0.5 w-5 border-t-2 border-dotted border-sun-dark" /> Summer</span>
+          <span className="flex items-center gap-1.5"><span className="h-0.5 w-5 bg-red-600" /> Hidden by surroundings</span>
+        </div>
+        <ul className="flex flex-col gap-1 text-sm" aria-label="When your surroundings hide the sun">
+          {paths.map(({ season, points }) => {
+            const ranges = blockedRanges(points)
+            const label = season.name === 'winter' ? 'Winter' : season.name === 'equinox' ? 'March / Sept' : 'Summer'
+            return (
+              <li key={season.name} className="flex gap-2">
+                <span className="w-24 shrink-0 font-semibold text-ink">{label}</span>
+                <span className={ranges.length ? 'text-red-800' : 'text-teal-deep'}>
+                  {ranges.length ? `sun hidden ${ranges.map(([a, b]) => `${formatHour(a)}–${formatHour(b)}`).join(', ')}` : 'full sun all day'}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
       </Card>
 
       <div className="flex flex-col gap-5">
+      {standHere}
+      <Card className="flex flex-col gap-2">
+        <p className="text-base font-bold text-ink">Measure it with your phone (about 30 seconds)</p>
+        <SweepDemo />
+      </Card>
+      {scanAvailable && (
+        <div className="flex flex-col gap-2">
+          <Button onClick={() => void startScan()} className="min-h-14 text-lg">
+            <Camera className="size-5" aria-hidden="true" />
+            Scan with my phone
+          </Button>
+          <p className="text-sm text-ink-soft">Stand where your panels will go (the open part of the roof, not next to the tank or stair room), hold the button and slowly turn from east to west, tracing the top of the buildings and trees. About 30 seconds.</p>
+        </div>
+      )}
+      {/* On a laptop: pair a phone, scan with it, and watch the marks land here. */}
+      {!scanAvailable && <PairWithPhone stops={stops} baseHorizon={baseHorizon} onChange={onChange} />}
+      {scanNote && (
+        <p className="rounded-xl bg-teal-soft p-3 text-sm font-medium text-teal-deep" role="status">
+          {scanNote}
+        </p>
+      )}
+      {scanning && <PhoneScan onDone={finishScan} onCancel={() => setScanning(false)} />}
       <div className="flex flex-col gap-2" role="group" aria-label="Quick choices">
         {PRESETS.map((p) => (
           <button
@@ -234,7 +352,8 @@ export function SkylineResult({
 
       <section aria-label="Stops" className="flex flex-col gap-3">
         <SectionTitle>Directions ({stops.length})</SectionTitle>
-        <div className="flex flex-wrap gap-2">
+        {dense && <p className="text-sm text-ink-soft">From your phone sweep. Drag any point on the chart up or down to fix it.</p>}
+        <div className={cn('flex flex-wrap gap-2', dense && 'hidden')}>
           {sorted.map((s) => {
             const edited = s.elevation !== s.scannedElevation
             return (
@@ -289,8 +408,13 @@ export function SkylineResult({
       </section>
 
       <Button onClick={onApply} className="min-h-14 text-lg">
-        Update my plan
+        See my solar plan
       </Button>
+      {onSkip && (
+        <Button variant="ghost" onClick={onSkip}>
+          Skip, nothing tall around me
+        </Button>
+      )}
       </div>
     </div>
   )

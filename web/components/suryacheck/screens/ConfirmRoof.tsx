@@ -2,7 +2,7 @@ import { AlertTriangle, LoaderCircle, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '../Button'
 import { Card } from '../Card'
-import { CornerHandle, EdgeAdder, EdgeLengths, RoofOutline } from '../MapLayers'
+import { CornerHandle, EdgeAdder, EdgeLengths, OutlineMover, RoofOutline } from '../MapLayers'
 import { DEFAULT_FIT, fitRectFor, SatelliteMap } from '../SatelliteMap'
 import { Tag } from '../Tag'
 import { MAP_FILL, SIDE_PANEL, SPLIT, STICKY_MAP_PANEL } from '../layout'
@@ -100,6 +100,7 @@ export function ConfirmRoof({
               return <EdgeAdder key={`e${i}-${points.length}`} at={{ x: (p.x + next.x) / 2, y: (p.y + next.y) / 2 }} onAdd={() => addCorner(i)} ariaLabel={`Add a corner after corner ${i + 1}`} />
             })}
           {adjusting && points.map((p, i) => <CornerHandle key={`c${i}-${points.length}`} point={p} label={String(i + 1)} ariaLabel={`Roof corner ${i + 1}. Drag to move.`} onMove={(q) => moveCorner(i, q)} />)}
+          {adjusting && <OutlineMover points={points} onMove={(pts) => setDraft(pts)} />}
         </SatelliteMap>
       </div>
 
@@ -108,7 +109,7 @@ export function ConfirmRoof({
           <h1 className="text-2xl font-bold text-ink lg:text-3xl">Is this your roof?</h1>
           <p className="text-base text-ink-soft">
             {adjusting
-              ? 'Drag each corner onto the edge of your roof. Tap a + to add a corner.'
+              ? 'Off the roof? Drag the Move handle in the middle to slide the whole outline. Then drag any corner onto the roof edge, or tap a + to add one.'
               : detected.containsPin === false
                 ? 'This is the closest building to your pin. Is it yours?'
                 : 'We found this outline from the map.'}
@@ -128,14 +129,14 @@ export function ConfirmRoof({
           <Card className="flex items-start gap-3 bg-red-50 text-red-900 ring-1 ring-red-200" role="alert">
             <AlertTriangle className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
             <p className="text-base font-medium">
-              This outline is far too big for one house ({num(MAX_ROOF_M2)} m² is the most we can plan). Tap &quot;Adjust corners&quot; and trace only your own roof, or tap &quot;Not my house&quot;.
+              This outline is far too big for one house ({num(MAX_ROOF_M2)} m² is the most we can plan). Tap &quot;Adjust outline&quot; and trace only your own roof, or tap &quot;Not my house&quot;.
             </p>
           </Card>
         ) : areaM2 > BIG_ROOF_M2 && (
           <Card className="flex items-start gap-3 bg-red-50 text-red-900 ring-1 ring-red-200" role="alert">
             <AlertTriangle className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
             <p className="text-base font-medium">
-              This outline is big for one house. It may cover several buildings, which would make the plan too optimistic. Tap &quot;Adjust corners&quot; and trace only your own roof.
+              This outline is big for one house. It may cover several buildings, which would make the plan too optimistic. Tap &quot;Adjust outline&quot; and trace only your own roof.
             </p>
           </Card>
         )}
@@ -143,7 +144,7 @@ export function ConfirmRoof({
           <Card className="flex items-start gap-3 bg-red-50 text-red-900 ring-1 ring-red-200" role="alert">
             <AlertTriangle className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
             <p className="text-base font-medium">
-              This outline is very small, maybe just a part of a roof. If your roof is bigger, tap &quot;Adjust corners&quot; and drag the corners out to its edges.
+              This outline is very small, maybe just a part of a roof. If your roof is bigger, tap &quot;Adjust outline&quot; and drag the corners out to its edges.
             </p>
           </Card>
         )}
@@ -158,7 +159,7 @@ export function ConfirmRoof({
         ) : (
           <div className="flex flex-col gap-3">
             <Button disabled={areaM2 > MAX_ROOF_M2} onClick={() => onConfirm({ ...detected, areaM2 })}>Yes, that&apos;s my roof</Button>
-            <Button variant="secondary" onClick={() => setStage('adjust')}>Adjust corners</Button>
+            <Button variant="secondary" onClick={() => setStage('adjust')}>Adjust outline</Button>
             <Button variant="danger" onClick={() => setStage('rejected')}>Not my house</Button>
           </div>
         )}

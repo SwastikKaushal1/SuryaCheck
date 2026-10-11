@@ -126,6 +126,114 @@ export function horizonFromStops(base: number[], stops: SkylineStop[]): number[]
   })
 }
 
+/** Directions a phone scan may set. The sun in India rises no further north than ~63° and sets by ~297°. */
+export const SCAN_FROM = 60
+export const SCAN_TO = 300
+
+/**
+ * Puts phone-scan readings onto the skyline: a mark within 22.5° of an existing direction updates it
+ * (the last mark wins), any other mark becomes a new direction. Marks facing north are left out.
+ */
+export function mergeScan(stops: SkylineStop[], marks: { bearing: number; elevation: number }[], base: number[]): SkylineStop[] {
+  const next = stops.map((s) => ({ ...s }))
+  marks.forEach((m, i) => {
+    if (m.bearing < SCAN_FROM || m.bearing > SCAN_TO) return
+    const elevation = clamp(Math.round(m.elevation), 0, 45)
+    const near = next
+      .map((s) => ({ s, gap: Math.abs(s.bearing - m.bearing) }))
+      .filter((x) => x.gap <= 22.5)
+      .sort((a, b) => a.gap - b.gap)[0]
+    if (near) {
+      near.s.elevation = elevation
+    } else {
+      const bearing = Math.round(m.bearing)
+      next.push({
+        id: `scan-${bearing}-${i}`,
+        label: shortCompass(bearing),
+        bearing,
+        elevation,
+        scannedElevation: Math.round(horizonAt(base, bearing)),
+        added: true,
+      })
+    }
+  })
+  return next
+}
+
+/**
+ * A continuous phone sweep (readings every few degrees) becomes one skyline point per 10°, the
+ * resolution PVGIS uses, keeping the tallest reading in each slice so a thin tower is not lost.
+ */
+export function profileToStops(marks: { bearing: number; elevation: number }[]): SkylineStop[] {
+  const tallest = new Map<number, number>()
+  for (const m of marks) {
+    if (m.bearing < SCAN_FROM || m.bearing > SCAN_TO) continue
+    const b = Math.round(m.bearing / 10) * 10
+    tallest.set(b, Math.max(tallest.get(b) ?? 0, clamp(Math.round(m.elevation), 0, 45)))
+  }
+  return [...tallest.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([bearing, elevation]) => ({ id: `sweep-${bearing}`, label: `${bearing}°`, bearing, elevation, scannedElevation: 3, added: true }))
+}
+
+/** A sweep covers at least this many 10° slices; fewer readings are treated as separate marks. */
+const SWEEP_MIN_SLICES = 6
+
+/**
+ * Puts any phone scan on the skyline. A sweep replaces the directions it covered with its own
+ * fine-grained points (directions outside the sweep are kept); a few single marks update the
+ * nearest directions, as mergeScan does.
+ */
+export function applyScan(stops: SkylineStop[], marks: { bearing: number; elevation: number }[], base: number[]): SkylineStop[] {
+  const sweep = profileToStops(marks)
+  if (sweep.length < SWEEP_MIN_SLICES) return mergeScan(stops, marks, base)
+  const from = sweep[0].bearing - 10
+  const to = sweep[sweep.length - 1].bearing + 10
+  return [...stops.filter((s) => s.bearing < from || s.bearing > to), ...sweep]
+}
+
+export interface SunPathPoint {
+  hour: number
+  azimuth: number
+  elevation: number
+  /** True when the skyline hides the sun at this moment. */
+  blocked: boolean
+}
+
+/** The sun's track across the sky on the three sample days, every 15 minutes, marked where the skyline hides it. */
+export function sunPaths(horizon: number[], lat: number): { season: Season; points: SunPathPoint[] }[] {
+  return seasonsFor(lat).map((season) => {
+    const points: SunPathPoint[] = []
+    for (let h = 4.5; h <= 19.5; h += 0.25) {
+      const sun = sunPosition(season, h)
+      if (sun.elevation <= 0) continue
+      // The open-sky baseline is ~3° of haze, not an obstacle: only a skyline above that counts as hiding the sun.
+      const sky = horizonAt(horizon, sun.azimuth)
+      points.push({ hour: h, ...sun, blocked: sky > 3.5 && sun.elevation < sky })
+    }
+    return { season, points }
+  })
+}
+
+/** Time ranges (solar time, hours) when the skyline hides the sun, e.g. [[7.25, 8.75], [16, 17.5]]. */
+export function blockedRanges(points: SunPathPoint[]): [number, number][] {
+  const out: [number, number][] = []
+  for (const p of points) {
+    if (!p.blocked) continue
+    const last = out[out.length - 1]
+    if (last && p.hour - last[1] < 0.26) last[1] = p.hour
+    else out.push([p.hour, p.hour])
+  }
+  return out.map(([a, b]) => [a, b + 0.25])
+}
+
+/** 135 -> "SE" */
+export const shortCompass = (bearing: number) =>
+  compassName(bearing)
+    .split('-')
+    .map((w) => w[0].toUpperCase())
+    .join('')
+
 const COMPASS = [
   'north',
   'north-east',

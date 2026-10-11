@@ -342,3 +342,31 @@ export function buildPlanModel(args: PlanArgs): PlanModel {
     },
   }
 }
+
+/** A healthy rooftop system in India pays back in about 4 to 6 years; past this it is a poor deal. */
+export const POOR_PAYBACK_YEARS = 9
+/** An open roof makes about 1,400 to 1,500 units per kW a year; below this, shade is eating too much. */
+export const POOR_YIELD_KWH_PER_KW = 1000
+
+/**
+ * Should we tell this household not to go solar? Returns the reasons in plain words
+ * (empty when the plan is fine). Panels last about 25 years and the inverter is usually
+ * replaced once after 10 to 12, so a slow payback leaves little real gain.
+ */
+export function solarVerdict(numbers: PlanNumbers, finance: Pick<FinanceResult, 'paybackRange' | 'savingsYearRange'>): { recommend: boolean; reasons: string[] } {
+  const reasons: string[] = []
+  const [lo, hi] = finance.paybackRange
+  const perKw = numbers.kWp > 0 ? numbers.kWhFinal / numbers.kWp : 0
+  if (numbers.kWp < 1) {
+    reasons.push(`There is only room for ${numbers.panelsFinal} panel${numbers.panelsFinal === 1 ? '' : 's'} here. That is too small to be worth the fitting cost.`)
+  }
+  if (finance.savingsYearRange[1] <= 0) {
+    reasons.push('It would not save you money on your bill.')
+  } else if (hi > 0 && (lo + hi) / 2 > POOR_PAYBACK_YEARS) {
+    reasons.push(`It would take ${lo} to ${hi} years to earn back what you spend. A good rooftop system in India pays back in about 4 to 6 years.`)
+  }
+  if (numbers.kWp > 0 && perKw < POOR_YIELD_KWH_PER_KW) {
+    reasons.push(`Shade cuts what the panels make: about ${Math.round(perKw).toLocaleString('en-IN')} units per kW a year, where an open roof makes about 1,400 to 1,500.`)
+  }
+  return { recommend: reasons.length === 0, reasons }
+}

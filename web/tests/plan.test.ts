@@ -166,4 +166,39 @@ ok(!withRoom.heatCells.some((c) => pointInPolygon({ x: c.x + c.w / 2, y: c.y + c
 const near = (dx: number, dy: number) => withRoom.heatCells.reduce((b, c) => (Math.hypot(c.x + c.w / 2 - (200 + dx), c.y + c.h / 2 - (150 + dy)) < Math.hypot(b.x + b.w / 2 - (200 + dx), b.y + b.h / 2 - (150 + dy)) ? c : b))
 ok(near(0, -60).score < near(0, 60).score && near(0, 60).score > 0.97, `north of the room gets less sun than south (${near(0, -60).score.toFixed(2)} vs ${near(0, 60).score.toFixed(2)})`)
 
+// phone skyline scan: sensor angles -> where the back camera points, and marks -> skyline directions
+import { aimFromOrientation, averageBearing } from '../lib/orientation'
+import { mergeScan } from '../lib/solar'
+const aimS = aimFromOrientation(180, 110, 0), aimE = aimFromOrientation(270, 90, 0)
+ok(Math.round(aimS.bearing) === 180 && Math.round(aimS.elevation) === 20, `phone upright facing south, tilted back 20° -> S, 20° up (${aimS.bearing.toFixed(0)}°, ${aimS.elevation.toFixed(0)}°)`)
+ok(Math.round(aimE.bearing) === 90 && Math.round(aimE.elevation) === 0, 'phone upright facing east -> E, level')
+ok(Math.round(averageBearing([350, 10])) % 360 === 0, 'averaging bearings works across north')
+const baseStops = [90, 135, 180, 225, 270].map((b) => ({ id: `s${b}`, label: String(b), bearing: b, elevation: 3, scannedElevation: 3 }))
+const merged = mergeScan(baseStops, [{ bearing: 140, elevation: 25 }, { bearing: 200, elevation: 18 }, { bearing: 296, elevation: 12 }, { bearing: 10, elevation: 30 }, { bearing: 142, elevation: 27 }], Array(36).fill(3))
+ok(merged.find((s) => s.bearing === 135)!.elevation === 27, 'a mark near SE updates SE (last mark wins)')
+ok(merged.find((s) => s.bearing === 180)!.elevation === 18 && merged.some((s) => s.bearing === 296 && s.elevation === 12 && s.added), 'a mark snaps to the nearest direction; one past the last direction is added')
+ok(!merged.some((s) => s.bearing === 10) && merged.length === 6, 'marks facing north are left out')
+// phone sweep: dense readings -> fine skyline, a narrow tower stays narrow, and the sun's hidden times
+import { applyScan, blockedRanges, profileToStops, sunPaths } from '../lib/solar'
+const sweep = Array.from({ length: 49 }, (_, i) => 60 + i * 5).map((b) => ({ bearing: b, elevation: b === 150 || b === 155 ? 35 : 4 })) // a tower at ~152°
+const sweepStops = profileToStops(sweep)
+ok(sweepStops.length === 25 && sweepStops.find((s) => s.bearing === 150)!.elevation === 35, `a sweep becomes one point per 10° and keeps the tower (${sweepStops.length} points)`)
+ok(sweepStops.filter((s) => s.elevation > 10).length <= 2, 'the narrow tower stays narrow (at most 2 slices tall)')
+const applied = applyScan(baseStops, sweep, Array(36).fill(3))
+ok(applied.length === 25 && !applied.some((s) => s.id === 's135'), 'a sweep replaces the 5 default directions it covers')
+ok(applyScan(baseStops, [{ bearing: 140, elevation: 20 }], Array(36).fill(3)).length === 5, 'a single mark still just updates the nearest direction')
+const towerHorizon = Array.from({ length: 36 }, (_, i) => (i === 15 || i === 16 ? 40 : 3)) // a 40° block at 150-160°
+const winterPath = sunPaths(towerHorizon, 28.6)[0].points
+const hidden = blockedRanges(winterPath)
+ok(hidden.length === 1 && hidden[0][0] > 8.5 && hidden[0][1] < 12, `a tall block to the south-south-east hides the winter sun only for a while in the morning (${hidden.map(([a, b]) => `${a}-${b}`).join(', ')})`)
+ok(blockedRanges(sunPaths(Array(36).fill(3), 28.6)[1].points).length === 0, 'open sky: the equinox sun is never hidden')
+// verdict: an honest "don't go solar" when the deal is clearly bad
+import { solarVerdict } from '../lib/plan'
+const nums = (kWp: number, kWh: number) => ({ panelsFit: 10, panelsFinal: Math.round(kWp / 0.55), kWp, kWhBefore: kWh, kWhFinal: kWh, limitedBy: 'bill' as const, coverage: 1 })
+const good = solarVerdict(nums(3, 4400), { paybackRange: [4, 6], savingsYearRange: [35000, 35000] })
+ok(good.recommend && good.reasons.length === 0, 'a sunny roof paying back in 4-6 years is recommended')
+const shaded = solarVerdict(nums(14.3, 12910), { paybackRange: [8, 12], savingsYearRange: [78000, 78000] })
+ok(!shaded.recommend && shaded.reasons.length === 2, `8-12 years and ~900 units per kW: not recommended (${shaded.reasons.length} reasons)`)
+ok(!solarVerdict(nums(0.55, 800), { paybackRange: [5, 6], savingsYearRange: [6000, 6000] }).recommend, 'room for one panel only: not recommended')
+ok(solarVerdict(nums(3, 4400), { paybackRange: [7, 9], savingsYearRange: [30000, 30000] }).recommend, '7-9 years on an open roof is slow but still OK')
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED'); process.exit(fails ? 1 : 0)

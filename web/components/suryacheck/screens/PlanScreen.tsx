@@ -1,21 +1,21 @@
-import { ArrowRight, Info, Landmark, LoaderCircle, Pause, Play, RefreshCw, Trees, ZoomIn, ZoomOut } from 'lucide-react'
+import { ArrowRight, Eye, Info, ThumbsDown, Landmark, LoaderCircle, Pause, Play, RefreshCw, Trees, ZoomIn, ZoomOut } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Button } from '../Button'
 import { Card, SectionTitle, StatCard } from '../Card'
 import { MonthlyChart } from '../MonthlyChart'
 import { fitRectFor, SatelliteMap, ScaleBar } from '../SatelliteMap'
 import { TiltDiagram } from '../TiltDiagram'
-import { NeighbourLayer, ObstacleLayer, PanelDimension, PanelLayer, RoofOutline, ShadowLayer } from '../MapLayers'
+import { NeighbourLayer, ObstacleLayer, PanelDimension, PanelLayer, RoofOutline, ShadowLayer, SkylineRing, SkylineShade, SunMarker } from '../MapLayers'
 import { Tag } from '../Tag'
 import { MAP_FILL, SIDE_PANEL, SPLIT, STICKY_MAP_PANEL } from '../layout'
 import type { LoanPlan } from '@/lib/finance'
 import { inr, kw, lakhRange, num, rupeeRange, yearsRange } from '@/lib/format'
 import type { FinanceParams, Point } from '@/lib/mockData'
 import type { PlanModel } from '@/lib/plan'
-import { formatHour, scoreColor, seasonsFor } from '@/lib/solar'
+import { compassName, formatHour, horizonAt, scoreColor, seasonsFor, sunPosition } from '@/lib/solar'
 import type { GeoFrame } from '@/lib/geo'
 import { polygonBounds, toPoints } from '@/lib/geometry'
-import { DEFAULT_PANEL, monthlyFromShape } from '@/lib/plan'
+import { DEFAULT_PANEL, monthlyFromShape, solarVerdict } from '@/lib/plan'
 
 /**
  * One fixed framing for the panels: centred on them, at least 14 m wide, and 4:3 like the map,
@@ -39,6 +39,7 @@ export function PlanScreen({
   heatmap,
   onHeatmap,
   scanDone,
+  skylineHorizon = null,
   ownHouse,
   residential,
   subsidyRules,
@@ -59,6 +60,8 @@ export function PlanScreen({
   heatmap: boolean
   onHeatmap: (on: boolean) => void
   scanDone: boolean
+  /** The surroundings' skyline (36 heights, every 10° from north), drawn around the roof; null if not added. */
+  skylineHorizon?: number[] | null
   ownHouse: boolean
   residential: boolean
   subsidyRules: FinanceParams['subsidy']
@@ -77,7 +80,18 @@ export function PlanScreen({
   const panelPts = plan.panels.flatMap((p) => [{ x: p.x, y: p.y }, { x: p.x + p.w, y: p.y + p.h }])
   const canCloseUp = panelPts.length > 0
   const shadows = plan.shadowsAt(hour)
+  // Winter sun at the time on the slider: is it behind the scanned surroundings? (Open sky reads ~3°, so ignore that.)
+  const winterSun = sunPosition(seasonsFor(frame.lat)[0], hour)
+  const skylineHere = skylineHorizon ? horizonAt(skylineHorizon, winterSun.azimuth) : 0
+  const sunHidden = skylineHere > 3.5 && winterSun.elevation < skylineHere
   const eligible = ownHouse && residential
+  // A clearly bad deal gets an honest "don't" first; the plan is one tap away if they still want it.
+  // Wait for the exact sunshine numbers so the advice doesn't flip when they arrive.
+  const verdict = solarVerdict(numbers, finance)
+  const [showAnyway, setShowAnyway] = useState(false)
+  const advise = !verdict.recommend && sunStatus !== 'loading'
+  // While we advise against it, show none of the plan: no panels, sizes or controls.
+  const hidePlan = advise && !showAnyway
 
   // "Play the day": sweep the winter sun from 7 am to 5 pm so the shadows move across the roof.
   const [playing, setPlaying] = useState(false)
@@ -111,10 +125,13 @@ export function PlanScreen({
       <SatelliteMap
         frame={frame}
         className={MAP_FILL}
-        fit={closeUp && canCloseUp ? closeUpRect(panelPts, plan.roof.metersPerUnit) : fitRectFor(plan.roof.points, 0.1)}
-        fitKey={closeUp && canCloseUp ? `plan-panels-${panelPts.length}` : 'plan-roof'}
+        fit={closeUp && canCloseUp && !hidePlan ? closeUpRect(panelPts, plan.roof.metersPerUnit) : fitRectFor(plan.roof.points, 0.1)}
+        fitKey={closeUp && canCloseUp && !hidePlan ? `plan-panels-${panelPts.length}` : 'plan-roof'}
         ariaLabel="Satellite map of your roof with solar panels and shadows"
         notice={
+          hidePlan ? (
+            <ScaleBar />
+          ) : (
           <>
             <div className="pointer-events-none absolute left-2 top-2 z-[600] flex items-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-sm font-bold text-ink shadow-md">
               <span className="inline-block h-3.5 w-2.5 rounded-[3px] bg-gradient-to-br from-blue-900 to-blue-600 ring-1 ring-slate-300" aria-hidden="true" />
@@ -124,6 +141,17 @@ export function PlanScreen({
             <p className="pointer-events-none absolute left-2 top-[3.4rem] z-[600] rounded-lg bg-white/85 px-2 py-0.5 text-[11px] font-semibold text-ink shadow">
               Each panel is {DEFAULT_PANEL.lengthM} × {DEFAULT_PANEL.widthM} m, drawn to scale
             </p>
+            {skylineHorizon && winterSun.elevation > 0 && (
+              <p
+                className={`pointer-events-none absolute left-2 top-[5.1rem] z-[600] max-w-[calc(100%-1rem)] rounded-lg px-2.5 py-1 text-xs font-bold shadow ${sunHidden ? 'bg-red-700 text-white' : 'bg-white/90 text-ink'}`}
+                role="status"
+              >
+                {formatHour(hour)}:{' '}
+                {sunHidden
+                  ? `sun hidden behind your surroundings to the ${compassName(winterSun.azimuth)}`
+                  : `sun in the ${compassName(winterSun.azimuth)}, clear of your surroundings`}
+              </p>
+            )}
             {canCloseUp && (
               <button
                 type="button"
@@ -144,6 +172,7 @@ export function PlanScreen({
               </div>
             )}
           </>
+          )
         }
       >
         <RoofOutline points={plan.roof.points} fillOpacity={0.14} />
@@ -154,15 +183,21 @@ export function PlanScreen({
             ))}
           </g>
         )}
+        {skylineHorizon && <SkylineRing horizon={skylineHorizon} roof={plan.roof.points} mpu={plan.roof.metersPerUnit} />}
         <ShadowLayer shadows={shadows} />
+        <SkylineShade roof={plan.roof.points} active={sunHidden} />
+        <SunMarker roof={plan.roof.points} azimuth={winterSun.azimuth} elevation={winterSun.elevation} hidden={sunHidden} mpu={plan.roof.metersPerUnit} />
+        {!hidePlan && (
         <g className="sc-fade-in">
           <PanelLayer panels={plan.panels.filter((p) => p.kept)} />
           <PanelDimension panels={plan.panels.filter((p) => p.kept)} mpu={plan.roof.metersPerUnit} />
         </g>
+        )}
         <ObstacleLayer obstacles={plan.obstacles} />
         <NeighbourLayer neighbours={plan.neighbours} roof={plan.roof.points} mpu={plan.roof.metersPerUnit} houseFloors={plan.houseFloors} />
       </SatelliteMap>
 
+      {!hidePlan && (
       <Card className="flex flex-col gap-5 lg:grid lg:grid-cols-3 lg:items-start lg:gap-6 lg:p-4">
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
@@ -231,9 +266,48 @@ export function PlanScreen({
           </button>
         </div>
       </Card>
+      )}
       </div>
 
       <div className={SIDE_PANEL}>
+      {advise && !showAnyway ? (
+        <>
+          <section aria-label="Our advice" className="flex flex-col gap-3 rounded-3xl bg-red-700 p-5 text-white shadow-[0_14px_30px_-14px_rgba(185,28,28,0.9)]" role="alert">
+            <ThumbsDown className="size-9" aria-hidden="true" />
+            <h1 className="text-3xl font-bold leading-tight">We don&apos;t recommend solar for this roof</h1>
+            <ul className="flex list-disc flex-col gap-2 pl-5 text-base text-white/95">
+              {verdict.reasons.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+            <p className="text-sm text-white/85">Panels last about 25 years, and the inverter usually needs replacing once along the way. With numbers like these, the money is better kept.</p>
+          </section>
+          <Card className="flex flex-col gap-2 text-ink">
+            <p className="text-base font-semibold">Think something is off?</p>
+            <p className="text-sm text-ink-soft">A wrong roof outline, a tank marked in the wrong place, or a skyline scan taken from the wrong spot can make the numbers look worse than they are.</p>
+          </Card>
+          <div className="flex flex-col gap-3">
+            <Button variant="secondary" onClick={onScan}>
+              <Trees className="size-5" aria-hidden="true" />
+              Check the shade from surroundings again
+            </Button>
+            <Button variant="ghost" onClick={() => setShowAnyway(true)}>
+              <Eye className="size-5" aria-hidden="true" />
+              Show me the plan anyway
+            </Button>
+          </div>
+        </>
+      ) : (
+      <>
+      {advise && (
+        <Card className="flex flex-col gap-1 border-l-4 border-red-600 bg-red-50 text-red-900" role="status">
+          <p className="flex items-center gap-2 text-base font-bold">
+            <ThumbsDown className="size-5 shrink-0" aria-hidden="true" />
+            We don&apos;t recommend solar here
+          </p>
+          <p className="text-sm">{verdict.reasons[0]}</p>
+        </Card>
+      )}
       <div className="flex flex-col gap-1 max-lg:-order-1">
         <h1 className="text-2xl font-bold text-ink lg:text-3xl">Your solar plan</h1>
         <p className="text-base text-ink-soft">
@@ -376,6 +450,8 @@ export function PlanScreen({
           <ArrowRight className="size-5" aria-hidden="true" />
         </Button>
       </div>
+      </>
+      )}
       </div>
     </div>
   )
