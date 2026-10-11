@@ -90,6 +90,8 @@ export function PlanScreen({
   const verdict = solarVerdict(numbers, finance)
   const [showAnyway, setShowAnyway] = useState(false)
   const advise = !verdict.recommend && sunStatus !== 'loading'
+  // While we advise against it, show none of the plan: no panels, sizes or controls.
+  const hidePlan = advise && !showAnyway
 
   // "Play the day": sweep the winter sun from 7 am to 5 pm so the shadows move across the roof.
   const [playing, setPlaying] = useState(false)
@@ -123,10 +125,13 @@ export function PlanScreen({
       <SatelliteMap
         frame={frame}
         className={MAP_FILL}
-        fit={closeUp && canCloseUp ? closeUpRect(panelPts, plan.roof.metersPerUnit) : fitRectFor(plan.roof.points, 0.1)}
-        fitKey={closeUp && canCloseUp ? `plan-panels-${panelPts.length}` : 'plan-roof'}
+        fit={closeUp && canCloseUp && !hidePlan ? closeUpRect(panelPts, plan.roof.metersPerUnit) : fitRectFor(plan.roof.points, 0.1)}
+        fitKey={closeUp && canCloseUp && !hidePlan ? `plan-panels-${panelPts.length}` : 'plan-roof'}
         ariaLabel="Satellite map of your roof with solar panels and shadows"
         notice={
+          hidePlan ? (
+            <ScaleBar />
+          ) : (
           <>
             <div className="pointer-events-none absolute left-2 top-2 z-[600] flex items-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-sm font-bold text-ink shadow-md">
               <span className="inline-block h-3.5 w-2.5 rounded-[3px] bg-gradient-to-br from-blue-900 to-blue-600 ring-1 ring-slate-300" aria-hidden="true" />
@@ -167,6 +172,7 @@ export function PlanScreen({
               </div>
             )}
           </>
+          )
         }
       >
         <RoofOutline points={plan.roof.points} fillOpacity={0.14} />
@@ -181,14 +187,17 @@ export function PlanScreen({
         <ShadowLayer shadows={shadows} />
         <SkylineShade roof={plan.roof.points} active={sunHidden} />
         <SunMarker roof={plan.roof.points} azimuth={winterSun.azimuth} elevation={winterSun.elevation} hidden={sunHidden} mpu={plan.roof.metersPerUnit} />
+        {!hidePlan && (
         <g className="sc-fade-in">
           <PanelLayer panels={plan.panels.filter((p) => p.kept)} />
           <PanelDimension panels={plan.panels.filter((p) => p.kept)} mpu={plan.roof.metersPerUnit} />
         </g>
+        )}
         <ObstacleLayer obstacles={plan.obstacles} />
         <NeighbourLayer neighbours={plan.neighbours} roof={plan.roof.points} mpu={plan.roof.metersPerUnit} houseFloors={plan.houseFloors} />
       </SatelliteMap>
 
+      {!hidePlan && (
       <Card className="flex flex-col gap-5 lg:grid lg:grid-cols-3 lg:items-start lg:gap-6 lg:p-4">
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
@@ -257,6 +266,7 @@ export function PlanScreen({
           </button>
         </div>
       </Card>
+      )}
       </div>
 
       <div className={SIDE_PANEL}>
