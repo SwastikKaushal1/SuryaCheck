@@ -10,6 +10,9 @@ const nextConfig = {
   ...(staticExport
     ? {}
     : {
+        // Dev only: let a phone reach the dev server through a Cloudflare tunnel or your Wi-Fi address
+        // (otherwise Next.js answers "Unauthorized" to the page's scripts and live reload).
+        allowedDevOrigins: ['*.trycloudflare.com', '192.168.*.*', '10.*.*.*'],
         async rewrites() {
           return [{ source: '/backend/:path*', destination: `${process.env.BACKEND_URL ?? 'http://127.0.0.1:8000'}/:path*` }]
         },

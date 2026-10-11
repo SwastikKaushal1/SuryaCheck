@@ -2,7 +2,7 @@ import { ArrowLeft, ArrowRight, Check, CodeXml, ShieldCheck } from 'lucide-react
 import { useId, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
-export const DESKTOP_STEPS = ['Location', 'Roof', 'Obstacles', 'Plan', 'Shade', 'Summary'] as const
+export const DESKTOP_STEPS = ['Location', 'Roof', 'Obstacles', 'Shade', 'Plan', 'Summary'] as const
 
 export function LogoMark({ className = 'size-9' }: { className?: string }) {
   // Each copy needs its own gradient ids; shared ids break when the first copy is hidden.

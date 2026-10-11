@@ -1,7 +1,6 @@
-import { Check, Crosshair, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Crosshair, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { aimFromOrientation, averageBearing, type Aim } from '@/lib/orientation'
-import { compassName } from '@/lib/solar'
 
 /** One skyline reading taken with the phone: what you see in that direction, how high it rises. */
 export interface ScanMark {
@@ -38,7 +37,24 @@ const SMOOTH = 8 // readings averaged, so the numbers don't jitter
  * Full-screen camera view with a crosshair. Point it at the top of the tallest building or tree
  * in a direction and tap Mark: the compass gives the direction, the tilt gives how high it rises.
  */
-export function PhoneScan({ onDone, onCancel }: { onDone: (marks: ScanMark[]) => void; onCancel: () => void }) {
+export function PhoneScan({
+  onDone,
+  onCancel,
+  onMark,
+  onUndo,
+  doneLabel,
+  status,
+}: {
+  onDone: (marks: ScanMark[]) => void
+  onCancel: () => void
+  /** Called the moment a direction is marked (phone-as-scanner sends it to the laptop). */
+  onMark?: (mark: ScanMark) => void
+  onUndo?: () => void
+  /** Text for the finish button; defaults to "Use N". */
+  doneLabel?: string
+  /** One line shown under the readout, e.g. "Linked to your laptop". */
+  status?: string
+}) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const recent = useRef<Aim[]>([])
   const [aim, setAim] = useState<Aim | null>(null)
@@ -99,98 +115,231 @@ export function PhoneScan({ onDone, onCancel }: { onDone: (marks: ScanMark[]) =>
     }
   }, [])
 
-  const mark = () => {
-    if (!aim || sensor !== 'compass') return
-    setMarks((m) => [...m, { bearing: Math.round(aim.bearing), elevation: Math.max(0, Math.min(45, Math.round(aim.elevation))) }])
+
+  // ---------- guided walk-through: five directions, one at a time ----------
+  const [stage, setStage] = useState<'intro' | 'guide' | 'finished'>('intro')
+  const [step, setStep] = useState(0)
+  const target = GUIDE[Math.min(step, GUIDE.length - 1)]
+  const hasCompass = sensor === 'compass'
+  const canTilt = sensor === 'compass' || sensor === 'no-compass'
+  // Signed turn to the target: positive = turn right (clockwise).
+  const turn = aim && hasCompass ? ((target.bearing - aim.bearing + 540) % 360) - 180 : 0
+  const facing = canTilt && (!hasCompass || Math.abs(turn) <= FACING_TOLERANCE)
+  const up = aim ? Math.round(aim.elevation) : 0
+
+  const record = (elevation: number) => {
+    if (!facing) return
+    // We guided the person to this exact direction, so store it (steadier than the live compass).
+    const m = { bearing: target.bearing, elevation: Math.max(0, Math.min(45, Math.round(elevation))) }
+    setMarks((list) => [...list.slice(0, step), m])
+    onMark?.(m)
     setFlash(true)
     window.setTimeout(() => setFlash(false), 180)
     navigator.vibrate?.(30)
+    if (step + 1 >= GUIDE.length) setStage('finished')
+    else setStep(step + 1)
+  }
+  const back = () => {
+    if (step === 0 && stage !== 'finished') return
+    const to = stage === 'finished' ? GUIDE.length - 1 : step - 1
+    setMarks((list) => list.slice(0, to))
+    onUndo?.()
+    setStep(to)
+    setStage('guide')
   }
 
-  const direction = aim ? compassName(aim.bearing) : '…'
-  const up = aim ? Math.round(aim.elevation) : 0
-
   return (
-    <div className="fixed inset-0 z-[2000] flex flex-col bg-black text-white" role="dialog" aria-modal="true" aria-label="Scan your surroundings with the camera">
+    <div className="fixed inset-0 z-[2000] flex flex-col overflow-hidden bg-black text-white" role="dialog" aria-modal="true" aria-label="Scan your surroundings with the camera">
       <video ref={videoRef} playsInline muted className="absolute inset-0 size-full object-cover" />
-      {camera === 'off' && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-sky-900 to-stone-800 p-8 text-center text-sm text-white/80">
-          The camera is off, but you can still scan: point the back of your phone at the top of each building or tree.
+      {camera === 'off' && <div className="absolute inset-0 bg-gradient-to-b from-sky-900 via-sky-800 to-stone-800" />}
+      {flash && <div className="pointer-events-none absolute inset-0 z-30 bg-white/40" />}
+
+      {/* close */}
+      <button type="button" onClick={onCancel} aria-label="Close the scan" className="absolute right-3 top-3 z-40 flex size-11 items-center justify-center rounded-full bg-black/50 backdrop-blur">
+        <X className="size-6" aria-hidden="true" />
+      </button>
+
+      {stage === 'intro' && (
+        <div className="relative z-20 flex flex-1 flex-col justify-end bg-black/60 p-5 pb-8">
+          <div className="flex flex-col gap-4 rounded-3xl bg-white p-5 text-ink shadow-2xl">
+            <h2 className="text-2xl font-bold">Scan your surroundings</h2>
+            <p className="text-sm text-ink-soft">About a minute. We guide you through 5 directions and measure how high the buildings and trees around you rise.</p>
+            <ol className="flex flex-col gap-3">
+              {INTRO.map(([t, d], i) => (
+                <li key={t} className="flex gap-3">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-sun text-sm font-extrabold">{i + 1}</span>
+                  <span>
+                    <span className="block text-base font-semibold">{t}</span>
+                    <span className="block text-sm text-ink-soft">{d}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+            {status && <p className="rounded-xl bg-teal-soft px-3 py-2 text-xs font-semibold text-teal-deep">{status}</p>}
+            {sensor === 'no-sensor' ? (
+              <p className="rounded-xl bg-red-50 p-3 text-sm font-medium text-red-900">
+                This device is not sharing its motion sensors with the browser, so a scan cannot work here. Close this and use the choices on the page.
+              </p>
+            ) : (
+              <button type="button" onClick={() => setStage('guide')} disabled={sensor === 'waiting'} className="min-h-14 rounded-2xl bg-sun text-lg font-bold text-ink disabled:opacity-50">
+                {sensor === 'waiting' ? 'Starting the sensors…' : 'I am in the middle of my roof, start'}
+              </button>
+            )}
+          </div>
         </div>
       )}
-      {flash && <div className="pointer-events-none absolute inset-0 bg-white/40" />}
 
-      {/* top: live readout */}
-      <div className="relative z-10 flex items-start justify-between gap-3 bg-gradient-to-b from-black/70 to-transparent p-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-white/70">Pointing</p>
-          <p className="text-2xl font-bold capitalize">
-            {sensor === 'compass'
-              ? `${direction} · ${Math.round(aim!.bearing)}°`
-              : sensor === 'waiting'
-                ? 'Finding the compass…'
-                : sensor === 'no-sensor'
-                  ? 'No motion sensors'
-                  : 'No compass'}
-          </p>
-          <p className="text-lg font-semibold text-sun">{aim ? `${up >= 0 ? up : 0}° above the horizon` : ' '}</p>
+      {stage === 'guide' && (
+        <>
+          {/* top: progress, compass strip, the instruction */}
+          <div className="relative z-20 flex flex-col gap-2 bg-gradient-to-b from-black/80 via-black/50 to-transparent px-4 pb-6 pt-4">
+            <div className="flex items-center gap-1.5 pr-12" aria-label={`Direction ${step + 1} of ${GUIDE.length}`}>
+              {GUIDE.map((g, i) => (
+                <span key={g.bearing} className={`h-1.5 flex-1 rounded-full ${i < step ? 'bg-sun' : i === step ? 'bg-white' : 'bg-white/25'}`} />
+              ))}
+            </div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/70">
+              Direction {step + 1} of {GUIDE.length}
+            </p>
+            {hasCompass && aim && <CompassStrip bearing={aim.bearing} target={target.bearing} />}
+            <p className="text-2xl font-extrabold leading-tight">
+              {facing ? <span className="text-emerald-300">Facing {target.name} ✓</span> : <>Face {target.name.toUpperCase()}</>}
+            </p>
+            <p className="text-sm text-white/85">
+              {!hasCompass
+                ? `No compass on this phone: face ${target.name.toLowerCase()} yourself (${target.hint}).`
+                : facing
+                  ? 'Now tilt up until the crosshair sits on the top of the tallest building or tree beyond your roof.'
+                  : `Turn ${turn > 0 ? 'right' : 'left'} about ${Math.round(Math.abs(turn) / 5) * 5}°. ${target.hint[0].toUpperCase()}${target.hint.slice(1)}.`}
+            </p>
+            {status && <p className="self-start rounded-full bg-teal-deep/90 px-2.5 py-0.5 text-xs font-semibold">{status}</p>}
+          </div>
+
+          {/* middle: turn arrow until facing, then the crosshair, height line and gauge */}
+          <div className="pointer-events-none relative z-10 flex flex-1 items-center justify-center">
+            {facing ? (
+              <>
+                <div className="absolute inset-x-0 top-1/2 h-0.5 bg-sun/80" />
+                <Crosshair className="size-20 text-sun drop-shadow-[0_0_6px_rgba(0,0,0,0.8)]" strokeWidth={1.5} aria-hidden="true" />
+                <span className="absolute left-1/2 top-1/2 ml-12 -translate-y-1/2 rounded-full bg-black/60 px-2.5 py-1 text-base font-bold text-sun">{Math.max(0, up)}° up</span>
+                <HeightGauge elevation={up} />
+              </>
+            ) : (
+              <div className="flex flex-col items-center gap-2 rounded-3xl bg-black/55 px-6 py-5 backdrop-blur">
+                {turn > 0 ? <ArrowRight className="size-24 text-sun" strokeWidth={2.5} aria-hidden="true" /> : <ArrowLeft className="size-24 text-sun" strokeWidth={2.5} aria-hidden="true" />}
+                <span className="text-xl font-bold">Turn {turn > 0 ? 'right' : 'left'}</span>
+              </div>
+            )}
+          </div>
+
+          {/* bottom: the two answers */}
+          <div className="relative z-20 flex flex-col gap-2 bg-gradient-to-t from-black/90 via-black/70 to-transparent p-4 pb-6">
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => record(OPEN_SKY)} disabled={!facing} className="min-h-14 rounded-2xl bg-white/15 px-3 text-base font-semibold backdrop-blur disabled:opacity-35">
+                Nothing tall here
+              </button>
+              <button type="button" onClick={() => aim && record(aim.elevation)} disabled={!facing} className="min-h-14 rounded-2xl bg-sun px-3 text-base font-extrabold text-ink shadow-lg active:scale-95 disabled:opacity-35">
+                Mark the top
+              </button>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <button type="button" onClick={back} disabled={step === 0} className="min-h-11 px-2 font-semibold text-white/85 disabled:opacity-30">
+                ← Back
+              </button>
+              <span className="text-white/60">
+                {marks.length} of {GUIDE.length} done
+              </span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {stage === 'finished' && (
+        <div className="relative z-20 flex flex-1 flex-col justify-end bg-black/60 p-5 pb-8">
+          <div className="flex flex-col gap-4 rounded-3xl bg-white p-5 text-ink shadow-2xl">
+            <h2 className="flex items-center gap-2 text-2xl font-bold">
+              <Check className="size-7 text-teal-deep" aria-hidden="true" />
+              All {GUIDE.length} directions done
+            </h2>
+            <ul className="grid grid-cols-5 gap-1.5 text-center">
+              {marks.map((m, i) => (
+                <li key={GUIDE[i].bearing} className="rounded-xl bg-sand px-1 py-2">
+                  <span className="block text-xs font-semibold text-ink-soft">{GUIDE[i].short}</span>
+                  <span className="block text-lg font-bold">{m.elevation <= OPEN_SKY ? 'open' : `${m.elevation}°`}</span>
+                </li>
+              ))}
+            </ul>
+            {status && <p className="rounded-xl bg-teal-soft px-3 py-2 text-xs font-semibold text-teal-deep">{status}</p>}
+            <button type="button" onClick={() => onDone(marks)} className="min-h-14 rounded-2xl bg-teal-deep text-lg font-bold text-white">
+              {doneLabel ?? 'Use this skyline'}
+            </button>
+            <button type="button" onClick={back} className="min-h-11 text-sm font-semibold text-ink-soft">
+              Redo the last direction
+            </button>
+          </div>
         </div>
-        <button type="button" onClick={onCancel} aria-label="Close the scan" className="flex size-11 items-center justify-center rounded-full bg-white/15 backdrop-blur">
-          <X className="size-6" aria-hidden="true" />
-        </button>
-      </div>
+      )}
+    </div>
+  )
+}
 
-      {/* crosshair */}
-      <div className="pointer-events-none relative z-10 flex flex-1 items-center justify-center">
-        <div className="absolute inset-x-0 top-1/2 h-px bg-sun/70" />
-        <Crosshair className="size-16 text-sun drop-shadow" strokeWidth={1.5} aria-hidden="true" />
-      </div>
+const INTRO: [string, string][] = [
+  ['Stand in the middle of your roof', 'That is where most panels will go.'],
+  ['Hold your phone upright', 'Portrait, like taking a photo, with the camera facing away from you.'],
+  ['Follow the arrow, then tilt up', 'Turn to each direction we show, then put the crosshair on the top of the tallest building or tree.'],
+  ['Only things beyond your roof', 'Skip your own water tank or stair room: you marked those in the last step.'],
+  ['Nothing tall there?', 'Tap "Nothing tall here" and we move on.'],
+]
 
-      {/* bottom: instructions, marks, buttons */}
-      <div className="relative z-10 flex flex-col gap-3 bg-gradient-to-t from-black/85 to-transparent p-4 pb-6">
-        <p className="text-center text-sm text-white/85">
-          {sensor === 'no-compass' || sensor === 'no-sensor'
-            ? `This ${sensor === 'no-sensor' ? 'device is not sharing its motion sensors' : 'phone does not share its compass'} with the browser, so a scan cannot tell directions. Close this and use the choices on the page instead.`
-            : 'Hold the phone upright. Put the crosshair on the top of the tallest building or tree, then tap Mark. Turn and repeat for east, south and west.'}
-        </p>
-        {marks.length > 0 && (
-          <ul className="flex flex-wrap justify-center gap-1.5" aria-label="Directions marked">
-            {marks.map((m, i) => (
-              <li key={i} className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-semibold capitalize backdrop-blur">
-                {compassName(m.bearing)} {m.elevation}°
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setMarks((m) => m.slice(0, -1))}
-            disabled={marks.length === 0}
-            className="min-h-12 rounded-full bg-white/15 px-3 text-sm font-semibold backdrop-blur disabled:opacity-30"
-          >
-            Undo
-          </button>
-          <button
-            type="button"
-            onClick={mark}
-            disabled={sensor !== 'compass'}
-            aria-label="Mark this direction"
-            className="flex size-20 items-center justify-center rounded-full border-4 border-white bg-sun text-base font-extrabold text-ink shadow-lg active:scale-95 disabled:opacity-40"
-          >
-            Mark
-          </button>
-          <button
-            type="button"
-            onClick={() => onDone(marks)}
-            disabled={marks.length === 0}
-            className="flex min-h-12 items-center justify-center gap-1.5 rounded-full bg-teal-deep px-3 text-sm font-bold disabled:opacity-30"
-          >
-            <Check className="size-4" aria-hidden="true" />
-            Use {marks.length || ''}
-          </button>
-        </div>
+/** The directions we walk through: the sun's path over India runs east, south, then west. */
+const GUIDE = [
+  { bearing: 90, name: 'East', short: 'E', hint: 'where the sun rises' },
+  { bearing: 135, name: 'South-East', short: 'SE', hint: 'between sunrise and noon' },
+  { bearing: 180, name: 'South', short: 'S', hint: 'where the sun is at noon' },
+  { bearing: 225, name: 'South-West', short: 'SW', hint: 'between noon and sunset' },
+  { bearing: 270, name: 'West', short: 'W', hint: 'where the sun sets' },
+]
+/** How close (degrees) to the target counts as facing it. Phone compasses wobble by ~10°. */
+const FACING_TOLERANCE = 20
+/** Height recorded for "Nothing tall here": the open-sky skyline. */
+const OPEN_SKY = 3
+
+/** A strip of compass marks centred on where the phone points, with the target highlighted. */
+function CompassStrip({ bearing, target }: { bearing: number; target: number }) {
+  const SPAN = 90 // degrees shown either side
+  const rel = (b: number) => ((b - bearing + 540) % 360) - 180
+  const labels = [0, 45, 90, 135, 180, 225, 270, 315].map((b, i) => ({ b, t: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][i] }))
+  const pos = (b: number) => `${50 + (rel(b) / SPAN) * 50}%`
+  const t = rel(target)
+  return (
+    <div className="relative h-9 overflow-hidden rounded-xl bg-black/45" aria-hidden="true">
+      {labels
+        .filter((l) => Math.abs(rel(l.b)) < SPAN)
+        .map((l) => (
+          <span key={l.b} className={`absolute top-1.5 -translate-x-1/2 text-sm font-bold ${l.b === target ? 'text-sun' : 'text-white/80'}`} style={{ left: pos(l.b) }}>
+            {l.t}
+          </span>
+        ))}
+      {Math.abs(t) < SPAN ? (
+        <span className="absolute bottom-0 h-1.5 w-8 -translate-x-1/2 rounded-full bg-sun" style={{ left: pos(target) }} />
+      ) : (
+        <span className={`absolute top-1.5 text-sm font-bold text-sun ${t > 0 ? 'right-2' : 'left-2'}`}>{t > 0 ? '→' : '←'}</span>
+      )}
+      <span className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-white" />
+    </div>
+  )
+}
+
+/** Vertical meter on the right: how far above the horizon the phone points (0-45°). */
+function HeightGauge({ elevation }: { elevation: number }) {
+  const pct = Math.max(0, Math.min(45, elevation)) / 45
+  return (
+    <div className="absolute right-3 top-1/2 flex h-56 -translate-y-1/2 flex-col items-center gap-1" aria-hidden="true">
+      <span className="text-[10px] font-bold text-white/80">45°</span>
+      <div className="relative w-2.5 flex-1 rounded-full bg-white/25">
+        <div className="absolute inset-x-0 bottom-0 rounded-full bg-sun" style={{ height: `${pct * 100}%` }} />
       </div>
+      <span className="text-[10px] font-bold text-white/80">0°</span>
     </div>
   )
 }

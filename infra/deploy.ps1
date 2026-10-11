@@ -29,7 +29,7 @@ Step 'Staging the backend (only the files Lambda needs, like the Dockerfile)'
 $api = Join-Path $infra 'build\api'
 if (Test-Path $api) { Remove-Item -Recurse -Force $api }
 New-Item -ItemType Directory -Force $api | Out-Null
-foreach ($f in 'main.py', 'geo.py', 'finance.py', 'reference.json', 'requirements.txt') {
+foreach ($f in 'main.py', 'geo.py', 'finance.py', 'pairing.py', 'reference.json', 'requirements.txt') {
   Copy-Item (Join-Path $root "backend\$f") $api
 }
 

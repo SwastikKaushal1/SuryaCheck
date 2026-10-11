@@ -33,15 +33,16 @@ import { useIsDesktop } from '@/lib/useIsDesktop'
 
 type Screen = 'landing' | 'where' | 'quick' | 'roof' | 'obstacles' | 'plan' | 'skyline' | 'summary'
 /** Every screen, for checking a saved one is still valid. */
-const ORDER_ALL: Screen[] = ['landing', 'where', 'quick', 'roof', 'obstacles', 'plan', 'skyline', 'summary']
+// The person stands on the roof once: mark what is on it, then scan what is around it, then see the plan.
+const ORDER_ALL: Screen[] = ['landing', 'where', 'quick', 'roof', 'obstacles', 'skyline', 'plan', 'summary']
 
 const BACK: Partial<Record<Screen, Screen>> = {
   where: 'landing',
   quick: 'where',
   roof: 'quick',
   obstacles: 'roof',
-  plan: 'obstacles',
-  skyline: 'plan',
+  skyline: 'obstacles',
+  plan: 'skyline',
   summary: 'plan',
 }
 
@@ -53,12 +54,12 @@ const DESKTOP_STEP: Record<Screen, number> = {
   quick: 1,
   roof: 2,
   obstacles: 3,
-  plan: 4,
-  skyline: 5,
+  skyline: 4,
+  plan: 5,
   summary: 6,
 }
 
-const DESKTOP_STEP_SCREEN: Screen[] = ['where', 'roof', 'obstacles', 'plan', 'skyline', 'summary']
+const DESKTOP_STEP_SCREEN: Screen[] = ['where', 'roof', 'obstacles', 'skyline', 'plan', 'summary']
 
 const REFERENCE_SYSTEM_KW = 3
 const DEFAULT_BILL = 2500
@@ -362,6 +363,12 @@ export default function App() {
     setScanDone(true)
     go('plan')
   }
+  /** "Nothing tall around me": no skyline shade, straight to the plan. */
+  const skipSkyline = () => {
+    setSkylineHorizon(null)
+    setScanDone(false)
+    go('plan')
+  }
 
   // Only the summary (and its PDF / WhatsApp text) is translated, so the toggle lives there alone.
   const langToggle = view === 'summary' ? <LangToggle lang={lang} onChange={setLang} /> : undefined
@@ -454,7 +461,7 @@ export default function App() {
           onRemoveNeighbour={(id) => setNeighbours((list) => list.filter((n) => n.id !== id))}
           houseFloors={houseFloors}
           onHouseFloors={setHouseFloors}
-          onContinue={() => go('plan')}
+          onContinue={startScan}
         />
       )}
 
@@ -489,6 +496,7 @@ export default function App() {
           adjustHorizon={adjustHorizon}
           neighbourSides={neighbours.map((n) => n.side)}
           onApply={applySkyline}
+          onSkip={skipSkyline}
         />
       )}
 

@@ -549,7 +549,7 @@ export function RoofObstacles({
       </section>
 
       <Button onClick={onContinue}>
-        See my solar plan
+        Next: shade from surroundings
         <ArrowRight className="size-5" aria-hidden="true" />
       </Button>
       </div>

@@ -120,6 +120,11 @@ export interface MonthlyResponse {
   monthly: number[]
   source: string
 }
+export interface PairView {
+  marks: { bearing: number; elevation: number }[]
+  phoneConnected: boolean
+  updated: number
+}
 export interface ReferenceData {
   panel: { widthM: number; lengthM: number; gapM: number; kWp: number }
   subsidy: { centralPerKwFirst2: number; centralThirdKw: number; centralCap: number; residentialOnly: boolean }
@@ -157,4 +162,12 @@ export const api = {
   finance: (body: FinanceRequest, signal?: AbortSignal) =>
     request<FinanceResponse>('/finance', { method: 'POST', body: JSON.stringify(body) }, signal),
   reference: (signal?: AbortSignal) => request<ReferenceData>('/reference', {}, signal),
+
+  // Phone-as-scanner pairing: the laptop creates a code and polls it; the phone sends marks to it.
+  pairCreate: () => request<{ code: string; expiresIn: number }>('/pair', { method: 'POST' }),
+  pairView: (code: string, signal?: AbortSignal) => request<PairView>(`/pair/${code}`, {}, signal),
+  pairHello: (code: string) => request<{ ok: boolean }>(`/pair/${code}/hello`, { method: 'POST' }),
+  pairMark: (code: string, mark: { bearing: number; elevation: number }) =>
+    request<{ count: number }>(`/pair/${code}/marks`, { method: 'POST', body: JSON.stringify(mark) }),
+  pairUndo: (code: string) => request<{ count: number }>(`/pair/${code}/marks/last`, { method: 'DELETE' }),
 }

@@ -1,5 +1,6 @@
 import { Camera, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { PairWithPhone } from './PairWithPhone'
 import { askMotionPermission, canPhoneScan, PhoneScan } from './PhoneScan'
 import { Button } from '../../Button'
 import { Card, SectionTitle } from '../../Card'
@@ -45,6 +46,7 @@ export function SkylineResult({
   onChange,
   onReset,
   onApply,
+  onSkip,
 }: {
   stops: SkylineStop[]
   baseHorizon: number[]
@@ -54,6 +56,8 @@ export function SkylineResult({
   onChange: (stops: SkylineStop[]) => void
   onReset: () => void
   onApply: () => void
+  /** Leave without adding skyline shade. */
+  onSkip?: () => void
 }) {
   const [selectedId, setSelectedId] = useState(stops[0]?.id ?? '')
   const svgRef = useRef<SVGSVGElement>(null)
@@ -244,6 +248,8 @@ export function SkylineResult({
           <p className="text-sm text-ink-soft">Stand on your roof and point your phone at the tallest building or tree in each direction. We read the direction and height from your phone.</p>
         </div>
       )}
+      {/* On a laptop: pair a phone, scan with it, and watch the marks land here. */}
+      {!scanAvailable && <PairWithPhone stops={stops} baseHorizon={baseHorizon} onChange={onChange} />}
       {scanNote && (
         <p className="rounded-xl bg-teal-soft p-3 text-sm font-medium text-teal-deep" role="status">
           {scanNote}
@@ -329,8 +335,13 @@ export function SkylineResult({
       </section>
 
       <Button onClick={onApply} className="min-h-14 text-lg">
-        Update my plan
+        See my solar plan
       </Button>
+      {onSkip && (
+        <Button variant="ghost" onClick={onSkip}>
+          Skip, nothing tall around me
+        </Button>
+      )}
       </div>
     </div>
   )

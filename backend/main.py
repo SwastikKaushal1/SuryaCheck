@@ -2,7 +2,7 @@ import os
 import threading
 from typing import List, Optional
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import finance
 import geo
+import pairing
 
 app = FastAPI(title="SuryaCheck API")
 
@@ -37,7 +38,7 @@ async def on_any(request: Request, call_next):
 # On AWS, CORS_ORIGINS lists the CloudFront site (set by infra/template.yaml); locally anything may call it.
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS,
-                   allow_methods=["GET", "POST", "OPTIONS"], allow_headers=["*"])
+                   allow_methods=["GET", "POST", "DELETE", "OPTIONS"], allow_headers=["*"])
 
 
 @app.exception_handler(RequestValidationError)
@@ -62,7 +63,7 @@ async def on_upstream(_: Request, exc: geo.UpstreamError):
 # ---------- routes ----------
 @app.get("/")
 def root():
-    return {"ok": True, "routes": ["/geocode", "/suggest", "/reverse", "/quick", "/monthly", "/building", "/yield", "/finance", "/reference", "/docs"]}
+    return {"ok": True, "routes": ["/geocode", "/suggest", "/reverse", "/quick", "/monthly", "/building", "/yield", "/finance", "/reference", "/pair", "/docs"]}
 
 
 @app.get("/health")
@@ -137,6 +138,47 @@ class FinanceReq(BaseModel):
 def finance_(r: FinanceReq):
     return finance.compute(r.kwp, r.stateCode, r.monthlyBill, r.residential, r.ownHouse,
                            r.kwhPerKwp, r.tariff, r.monthlyUnits)
+
+
+# ---------- phone-as-scanner pairing (see pairing.py) ----------
+CODE = r"^\d{4}$"
+
+
+class MarkReq(BaseModel):
+    bearing: float = Field(..., ge=0, le=360)
+    elevation: float = Field(..., ge=-90, le=90)
+
+
+def _no_session():
+    return err(404, "pairing_not_found", "That code has expired or does not exist. Start pairing again on the laptop.")
+
+
+@app.post("/pair")
+def pair_create():
+    return pairing.store.create()
+
+
+@app.get("/pair/{code}")
+def pair_view(code: str = Path(..., pattern=CODE)):
+    v = pairing.store.view(code)
+    return v if v is not None else _no_session()
+
+
+@app.post("/pair/{code}/hello")
+def pair_hello(code: str = Path(..., pattern=CODE)):
+    return {"ok": True} if pairing.store.hello(code) else _no_session()
+
+
+@app.post("/pair/{code}/marks")
+def pair_mark(r: MarkReq, code: str = Path(..., pattern=CODE)):
+    n = pairing.store.add_mark(code, r.bearing, r.elevation)
+    return {"count": n} if n is not None else _no_session()
+
+
+@app.delete("/pair/{code}/marks/last")
+def pair_undo(code: str = Path(..., pattern=CODE)):
+    n = pairing.store.undo(code)
+    return {"count": n} if n is not None else _no_session()
 
 
 @app.get("/reference")

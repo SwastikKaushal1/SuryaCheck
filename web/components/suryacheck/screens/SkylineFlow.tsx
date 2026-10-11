@@ -12,6 +12,7 @@ export function SkylineFlow({
   adjustHorizon,
   neighbourSides = [],
   onApply,
+  onSkip,
 }: {
   readings: ScanStopReading[]
   baseHorizon: number[]
@@ -19,6 +20,8 @@ export function SkylineFlow({
   adjustHorizon?: (horizon: number[]) => number[]
   neighbourSides?: Neighbour['side'][]
   onApply: (stops: SkylineStop[]) => void
+  /** "Nothing tall around me": go to the plan with no skyline shade. */
+  onSkip: () => void
 }) {
   const [stops, setStops] = useState<SkylineStop[]>(() => toStops(readings))
   return (
@@ -30,6 +33,7 @@ export function SkylineFlow({
       onChange={setStops}
       onReset={() => setStops(toStops(readings))}
       onApply={() => onApply(stops)}
+      onSkip={onSkip}
     />
   )
 }
