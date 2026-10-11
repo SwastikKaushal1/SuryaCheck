@@ -16,6 +16,8 @@ No login. No machine learning. Every number can be explained and checked.
 
 **🌐 Live app: [d3s69kasxcslyo.cloudfront.net](https://d3s69kasxcslyo.cloudfront.net)** (hosted on AWS: S3 + CloudFront, API on Lambda)
 
+**🎬 Demo video: [youtu.be/wh6qYJc2h3k](https://youtu.be/wh6qYJc2h3k)** (3-minute walkthrough: roof, obstacles, phone skyline scan, solar plan, AWS)
+
 [Run it](#-run-it) · [How it works](#-how-it-works) · [Deploy on AWS](#%EF%B8%8F-deploy-on-aws) · [Report a bug](../../issues)
 
 ---
