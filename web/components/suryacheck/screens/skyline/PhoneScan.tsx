@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight, Check, Crosshair, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { aimFromOrientation, averageBearing, type Aim } from '@/lib/orientation'
+import { SweepDemo } from './SweepDemo'
 
 /** One skyline reading taken with the phone: what you see in that direction, how high it rises. */
 export interface ScanMark {
@@ -164,10 +165,11 @@ export function PhoneScan({
       </button>
 
       {stage === 'intro' && (
-        <div className="relative z-20 flex flex-1 flex-col justify-end bg-black/60 p-5 pb-8">
-          <div className="flex flex-col gap-4 rounded-3xl bg-white p-5 text-ink shadow-2xl">
+        <div className="relative z-20 flex min-h-0 flex-1 flex-col overflow-y-auto bg-black/60 p-4 pb-6">
+          <div className="mt-auto flex flex-col gap-3 rounded-3xl bg-white p-4 text-ink shadow-2xl">
             <h2 className="text-2xl font-bold">Trace your skyline</h2>
             <p className="text-sm text-ink-soft">About 30 seconds. Like taking a panorama: you slowly turn from east to west while keeping the crosshair on the top edge of everything around you.</p>
+            <SweepDemo />
             <ol className="flex flex-col gap-3">
               {INTRO.map(([t, d], i) => (
                 <li key={t} className="flex gap-3">
@@ -186,7 +188,7 @@ export function PhoneScan({
               </p>
             ) : (
               <button type="button" onClick={() => setStage('sweep')} disabled={sensor === 'waiting'} className="min-h-14 rounded-2xl bg-sun text-lg font-bold text-ink disabled:opacity-50">
-                {sensor === 'waiting' ? 'Starting the sensors…' : 'I am in the middle of my roof, start'}
+                {sensor === 'waiting' ? 'Starting the sensors…' : 'I am where my panels will go, start'}
               </button>
             )}
           </div>
@@ -308,7 +310,7 @@ export function PhoneScan({
 }
 
 const INTRO: [string, string][] = [
-  ['Stand in the middle of your roof', 'That is where most panels will go.'],
+  ['Stand where your panels will go', 'On the open, sunny part of the roof, away from the water tank and stair room: that is the spot whose shade matters.'],
   ['Hold your phone upright and face east', 'Portrait, like taking a photo. The arrow shows you where east is.'],
   ['Press and hold, then turn slowly to the west', 'Keep the crosshair on the top edge of buildings, trees and towers. Where it is open, keep it on the horizon.'],
   ['Only things beyond your roof', 'Skip your own water tank or stair room: you marked those in the last step.'],

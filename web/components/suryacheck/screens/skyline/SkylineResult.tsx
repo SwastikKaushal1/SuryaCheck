@@ -1,6 +1,7 @@
 import { Camera, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { PairWithPhone } from './PairWithPhone'
+import { SweepDemo } from './SweepDemo'
 import { askMotionPermission, canPhoneScan, PhoneScan } from './PhoneScan'
 import { Button } from '../../Button'
 import { Card, SectionTitle } from '../../Card'
@@ -302,13 +303,17 @@ export function SkylineResult({
       </Card>
 
       <div className="flex flex-col gap-5">
+      <Card className="flex flex-col gap-2">
+        <p className="text-base font-bold text-ink">Measure it with your phone (about 30 seconds)</p>
+        <SweepDemo />
+      </Card>
       {scanAvailable && (
         <div className="flex flex-col gap-2">
           <Button onClick={() => void startScan()} className="min-h-14 text-lg">
             <Camera className="size-5" aria-hidden="true" />
             Scan with my phone
           </Button>
-          <p className="text-sm text-ink-soft">Stand in the middle of your roof, hold the button and slowly turn from east to west, tracing the top of the buildings and trees. About 30 seconds.</p>
+          <p className="text-sm text-ink-soft">Stand where your panels will go (the open part of the roof, not next to the tank or stair room), hold the button and slowly turn from east to west, tracing the top of the buildings and trees. About 30 seconds.</p>
         </div>
       )}
       {/* On a laptop: pair a phone, scan with it, and watch the marks land here. */}

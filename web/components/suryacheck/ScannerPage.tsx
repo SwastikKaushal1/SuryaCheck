@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Logo } from './AppShell'
 import { Button } from './Button'
 import { askMotionPermission, PhoneScan } from './screens/skyline/PhoneScan'
+import { SweepDemo } from './screens/skyline/SweepDemo'
 import { api, toApiError } from '@/lib/api'
 
 type Stage = 'code' | 'scanning' | 'done'
@@ -84,8 +85,9 @@ export function ScannerPage({ initialCode }: { initialCode: string }) {
               <Smartphone className="size-10 text-sun-dark" aria-hidden="true" />
               <h1 className="text-2xl font-bold text-ink">Use this phone as a scanner</h1>
               <p className="text-base text-ink-soft">
-                Enter the code shown on your laptop. Then stand on your roof and point this phone at the tallest building or tree in each direction.
+                Enter the code shown on your laptop. Then stand where your panels will go, on the open part of the roof, and trace the skyline from east to west.
               </p>
+              <SweepDemo />
             </div>
             <label className="flex flex-col gap-2">
               <span className="text-sm font-semibold text-ink">Code from your laptop</span>
