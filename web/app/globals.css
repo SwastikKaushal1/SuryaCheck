@@ -186,6 +186,8 @@
 .sp-panel { animation: sp-panel 8s cubic-bezier(.2,.9,.3,1.2) infinite both; }
 .sp-badge { animation: sp-badge 8s ease-out infinite; }
 .sp-sun { animation: sp-sun 8s linear infinite; }
+.sp-sky { animation: sp-sky 8s ease-in-out infinite; }
+.sp-trace { stroke-dasharray: 100; animation: sp-trace 8s ease-in-out infinite; }
 .sp-cap { opacity: 0; }
 .sp-cap-1 { animation: sp-cap-1 8s linear infinite; }
 .sp-cap-2 { animation: sp-cap-2 8s linear infinite; }
@@ -198,6 +200,8 @@
 @keyframes sp-panel { 0%, 40% { opacity: 0; transform: translateY(-14px) scale(.9); } 48%, 90% { opacity: 1; transform: translateY(0) scale(1); } 97%, 100% { opacity: 0; transform: none; } }
 @keyframes sp-badge { 0%, 58% { opacity: 0; transform: translateY(8px); } 64%, 90% { opacity: 1; transform: none; } 97%, 100% { opacity: 0; } }
 @keyframes sp-sun { 0% { transform: translateX(-150px); opacity: 0; } 8% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateX(150px); opacity: 0; } }
+@keyframes sp-sky { 0%, 34% { opacity: 0; transform: translateY(14px); } 40%, 90% { opacity: 1; transform: none; } 97%, 100% { opacity: 0; } }
+@keyframes sp-trace { 0%, 38% { stroke-dashoffset: 100; opacity: 1; } 50%, 90% { stroke-dashoffset: 0; opacity: 1; } 97%, 100% { stroke-dashoffset: 0; opacity: 0; } }
 @keyframes sp-cap-1 { 0%, 22% { opacity: 1; } 24%, 100% { opacity: 0; } }
 @keyframes sp-cap-2 { 0%, 22% { opacity: 0; } 24%, 36% { opacity: 1; } 38%, 100% { opacity: 0; } }
 @keyframes sp-cap-3 { 0%, 36% { opacity: 0; } 38%, 50% { opacity: 1; } 52%, 100% { opacity: 0; } }
@@ -212,7 +216,7 @@
 .group:hover .icon-bob { transform: translateY(-3px) rotate(-6deg); }
 
 @media (prefers-reduced-motion: reduce) {
-  .sp-draw, .sp-fill, .sp-obs, .sp-shadow, .sp-panel, .sp-badge, .sp-sun { animation: none; }
+  .sp-draw, .sp-fill, .sp-obs, .sp-shadow, .sp-panel, .sp-badge, .sp-sun, .sp-sky, .sp-trace { animation: none; }
   .sp-cap-1, .sp-cap-2, .sp-cap-3 { animation: none; opacity: 0; }
   .sp-cap-4 { animation: none; opacity: 1; }
   .sp-shadow { opacity: .55; }
@@ -235,6 +239,10 @@
 @keyframes hs-measure { 0%, 35% { transform: scaleX(0); } 55%, 88% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(1); opacity: 0; } }
 @keyframes hs-label { 0%, 50% { opacity: 0; } 60%, 88% { opacity: 1; } 100% { opacity: 0; } }
 
+.hs-trace { stroke-dasharray: 100; animation: hs-trace 4s linear infinite both; }
+.hs-phone { animation: hs-phone 4s linear infinite both; }
+@keyframes hs-trace { 0%, 10% { stroke-dashoffset: 100; } 80%, 92% { stroke-dashoffset: 0; opacity: 1; } 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes hs-phone { 0%, 10% { transform: translate(8px, 52px); opacity: 0; } 14% { opacity: 1; } 80% { transform: translate(192px, 52px); opacity: 1; } 92%, 100% { transform: translate(192px, 52px); opacity: 0; } }
 .hs-sun { animation: hs-sun 4s ease-in-out infinite both; }
 .hs-cell { animation: hs-cell 4s ease-in-out infinite both; }
 @keyframes hs-sun { 0% { transform: translate(-30px, 8px); } 50% { transform: translate(0, -4px); } 100% { transform: translate(30px, 8px); } }
@@ -245,14 +253,14 @@
 @keyframes hs-line { 0%, 5% { transform: scaleX(0); } 25%, 85% { transform: scaleX(1); opacity: 1; } 100% { opacity: 0; } }
 @keyframes hs-plane { 0%, 55% { transform: translate(0, 0) rotate(0); opacity: 0; } 60% { opacity: 1; } 95% { transform: translate(60px, -26px) rotate(-12deg); opacity: 1; } 100% { transform: translate(70px, -30px); opacity: 0; } }
 
-/* the "you are here" highlight walks across the four steps */
-.step-glow { animation: step-glow 8s ease-in-out infinite both; }
+/* the "you are here" highlight walks across the five steps */
+.step-glow { animation: step-glow 10s ease-in-out infinite both; }
 @keyframes step-glow {
   0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); transform: translateY(0); }
-  6%, 19% { box-shadow: 0 0 0 3px rgba(245, 158, 11, .55), 0 18px 34px -16px rgba(217, 119, 6, .55); transform: translateY(-4px); }
-  25%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); transform: translateY(0); }
+  5%, 15% { box-shadow: 0 0 0 3px rgba(245, 158, 11, .55), 0 18px 34px -16px rgba(217, 119, 6, .55); transform: translateY(-4px); }
+  20%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); transform: translateY(0); }
 }
-.step-dot { animation: step-dot 8s linear infinite both; }
+.step-dot { animation: step-dot 10s linear infinite both; }
 @keyframes step-dot { 0% { left: 0%; } 100% { left: 100%; } }
 
 /* ---------- What you get ---------- */
@@ -264,7 +272,7 @@
 @keyframes shine { to { transform: translateX(120%); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .hs-pin, .hs-ripple, .hs-pop, .hs-measure, .hs-label, .hs-sun, .hs-cell, .hs-line, .hs-plane,
+  .hs-pin, .hs-ripple, .hs-pop, .hs-measure, .hs-label, .hs-sun, .hs-cell, .hs-line, .hs-plane, .hs-trace, .hs-phone,
   .step-glow, .step-dot, .float-icon, .is-visible.shine::after { animation: none; }
-  .hs-ripple, .hs-plane { opacity: 0; }
+  .hs-ripple, .hs-plane, .hs-phone { opacity: 0; }
 }
