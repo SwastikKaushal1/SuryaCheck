@@ -166,4 +166,16 @@ ok(!withRoom.heatCells.some((c) => pointInPolygon({ x: c.x + c.w / 2, y: c.y + c
 const near = (dx: number, dy: number) => withRoom.heatCells.reduce((b, c) => (Math.hypot(c.x + c.w / 2 - (200 + dx), c.y + c.h / 2 - (150 + dy)) < Math.hypot(b.x + b.w / 2 - (200 + dx), b.y + b.h / 2 - (150 + dy)) ? c : b))
 ok(near(0, -60).score < near(0, 60).score && near(0, 60).score > 0.97, `north of the room gets less sun than south (${near(0, -60).score.toFixed(2)} vs ${near(0, 60).score.toFixed(2)})`)
 
+// phone skyline scan: sensor angles -> where the back camera points, and marks -> skyline directions
+import { aimFromOrientation, averageBearing } from '../lib/orientation'
+import { mergeScan } from '../lib/solar'
+const aimS = aimFromOrientation(180, 110, 0), aimE = aimFromOrientation(270, 90, 0)
+ok(Math.round(aimS.bearing) === 180 && Math.round(aimS.elevation) === 20, `phone upright facing south, tilted back 20° -> S, 20° up (${aimS.bearing.toFixed(0)}°, ${aimS.elevation.toFixed(0)}°)`)
+ok(Math.round(aimE.bearing) === 90 && Math.round(aimE.elevation) === 0, 'phone upright facing east -> E, level')
+ok(Math.round(averageBearing([350, 10])) % 360 === 0, 'averaging bearings works across north')
+const baseStops = [90, 135, 180, 225, 270].map((b) => ({ id: `s${b}`, label: String(b), bearing: b, elevation: 3, scannedElevation: 3 }))
+const merged = mergeScan(baseStops, [{ bearing: 140, elevation: 25 }, { bearing: 200, elevation: 18 }, { bearing: 296, elevation: 12 }, { bearing: 10, elevation: 30 }, { bearing: 142, elevation: 27 }], Array(36).fill(3))
+ok(merged.find((s) => s.bearing === 135)!.elevation === 27, 'a mark near SE updates SE (last mark wins)')
+ok(merged.find((s) => s.bearing === 180)!.elevation === 18 && merged.some((s) => s.bearing === 296 && s.elevation === 12 && s.added), 'a mark snaps to the nearest direction; one past the last direction is added')
+ok(!merged.some((s) => s.bearing === 10) && merged.length === 6, 'marks facing north are left out')
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED'); process.exit(fails ? 1 : 0)

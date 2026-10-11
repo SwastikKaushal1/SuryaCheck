@@ -1,12 +1,13 @@
-import { Plus, RotateCcw, Trash2 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { Camera, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { askMotionPermission, canPhoneScan, PhoneScan } from './PhoneScan'
 import { Button } from '../../Button'
 import { Card, SectionTitle } from '../../Card'
 import { NumberField } from '../../NumberField'
 import { Tag } from '../../Tag'
 import { clamp } from '@/lib/geometry'
 import type { Neighbour, SkylineStop } from '@/lib/mockData'
-import { horizonAt, horizonFromStops, skylineLossPct, tallestDirection } from '@/lib/solar'
+import { horizonAt, horizonFromStops, mergeScan, skylineLossPct, tallestDirection } from '@/lib/solar'
 import { cn } from '@/lib/utils'
 
 const W = 340
@@ -57,6 +58,30 @@ export function SkylineResult({
   const [selectedId, setSelectedId] = useState(stops[0]?.id ?? '')
   const svgRef = useRef<SVGSVGElement>(null)
   const dragging = useRef<string | null>(null)
+
+  // Phone scan: only offered on touch phones with motion sensors (decided after mount, never on the server).
+  const [scanAvailable, setScanAvailable] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [scanNote, setScanNote] = useState('')
+  useEffect(() => setScanAvailable(canPhoneScan()), [])
+  const startScan = async () => {
+    setScanNote('')
+    // Asking shows the iPhone prompt. Whatever the answer, open the scanner: it tells the person
+    // within a few seconds if no motion readings arrive, so a wrong "denied" can never block a phone that works.
+    await askMotionPermission()
+    setScanning(true)
+  }
+  const finishScan = (marks: { bearing: number; elevation: number }[]) => {
+    setScanning(false)
+    const next = mergeScan(stops, marks, baseHorizon)
+    onChange(next)
+    const used = marks.filter((m) => m.bearing >= 60 && m.bearing <= 300).length
+    setScanNote(
+      used === marks.length
+        ? `Scan added: ${used} direction${used === 1 ? '' : 's'}. Check the chart, and drag any dot that looks off.`
+        : `Scan added ${used} of ${marks.length} marks. Marks facing north were left out: the sun never shines from there in India.`,
+    )
+  }
 
   const sorted = [...stops].sort((a, b) => a.bearing - b.bearing)
   const horizon = horizonFromStops(baseHorizon, stops)
@@ -210,6 +235,21 @@ export function SkylineResult({
       </Card>
 
       <div className="flex flex-col gap-5">
+      {scanAvailable && (
+        <div className="flex flex-col gap-2">
+          <Button onClick={() => void startScan()} className="min-h-14 text-lg">
+            <Camera className="size-5" aria-hidden="true" />
+            Scan with my phone
+          </Button>
+          <p className="text-sm text-ink-soft">Stand on your roof and point your phone at the tallest building or tree in each direction. We read the direction and height from your phone.</p>
+        </div>
+      )}
+      {scanNote && (
+        <p className="rounded-xl bg-teal-soft p-3 text-sm font-medium text-teal-deep" role="status">
+          {scanNote}
+        </p>
+      )}
+      {scanning && <PhoneScan onDone={finishScan} onCancel={() => setScanning(false)} />}
       <div className="flex flex-col gap-2" role="group" aria-label="Quick choices">
         {PRESETS.map((p) => (
           <button

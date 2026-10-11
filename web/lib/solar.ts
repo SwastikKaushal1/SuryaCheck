@@ -126,6 +126,47 @@ export function horizonFromStops(base: number[], stops: SkylineStop[]): number[]
   })
 }
 
+/** Directions a phone scan may set. The sun in India rises no further north than ~63° and sets by ~297°. */
+export const SCAN_FROM = 60
+export const SCAN_TO = 300
+
+/**
+ * Puts phone-scan readings onto the skyline: a mark within 22.5° of an existing direction updates it
+ * (the last mark wins), any other mark becomes a new direction. Marks facing north are left out.
+ */
+export function mergeScan(stops: SkylineStop[], marks: { bearing: number; elevation: number }[], base: number[]): SkylineStop[] {
+  const next = stops.map((s) => ({ ...s }))
+  marks.forEach((m, i) => {
+    if (m.bearing < SCAN_FROM || m.bearing > SCAN_TO) return
+    const elevation = clamp(Math.round(m.elevation), 0, 45)
+    const near = next
+      .map((s) => ({ s, gap: Math.abs(s.bearing - m.bearing) }))
+      .filter((x) => x.gap <= 22.5)
+      .sort((a, b) => a.gap - b.gap)[0]
+    if (near) {
+      near.s.elevation = elevation
+    } else {
+      const bearing = Math.round(m.bearing)
+      next.push({
+        id: `scan-${bearing}-${i}`,
+        label: shortCompass(bearing),
+        bearing,
+        elevation,
+        scannedElevation: Math.round(horizonAt(base, bearing)),
+        added: true,
+      })
+    }
+  })
+  return next
+}
+
+/** 135 -> "SE" */
+export const shortCompass = (bearing: number) =>
+  compassName(bearing)
+    .split('-')
+    .map((w) => w[0].toUpperCase())
+    .join('')
+
 const COMPASS = [
   'north',
   'north-east',
