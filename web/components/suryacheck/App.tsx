@@ -6,6 +6,7 @@ import { PlanScreen } from './screens/PlanScreen'
 import { QuickEstimate } from './screens/QuickEstimate'
 import { RoofObstacles, type RoofType } from './screens/RoofObstacles'
 import { SkylineFlow } from './screens/SkylineFlow'
+import { StandHere } from './screens/skyline/StandHere'
 import { LangToggle, Summary } from './screens/Summary'
 import { WhereYouLive } from './screens/WhereYouLive'
 import { api, type Place } from '@/lib/api'
@@ -499,6 +500,7 @@ export default function App() {
           onApply={applySkyline}
           onSkip={skipSkyline}
           latitude={frame.lat}
+          standHere={committed && roof && localPlan ? <StandHere frame={committed} roof={roof.points} panels={localPlan.panels} obstacles={obstacles} /> : undefined}
         />
       )}
 

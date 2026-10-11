@@ -1,4 +1,5 @@
 import { LoaderCircle, Smartphone, Square } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../Button'
 import { Card } from '../../Card'
@@ -96,6 +97,15 @@ export function PairWithPhone({
           <Smartphone className="size-5 text-teal-deep" aria-hidden="true" />
           Scan with your phone
         </p>
+        {!localOnly && (
+          <div className="flex flex-col items-center gap-2">
+            <div className="rounded-2xl bg-white p-3 ring-1 ring-black/10">
+              <QRCodeSVG value={`${origin}/?scan=${phase.code}`} size={176} marginSize={0} title={`QR code that opens the scanner with code ${phase.code}`} />
+            </div>
+            <p className="text-sm font-semibold text-ink">Point your phone camera at this code</p>
+            <p className="text-xs text-ink-soft">No QR scanner? Use the link or code below.</p>
+          </div>
+        )}
         <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm text-ink">
           <li>
             On your phone, open{' '}

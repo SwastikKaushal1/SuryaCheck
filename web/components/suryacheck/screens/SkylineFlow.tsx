@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { SkylineResult } from './skyline/SkylineResult'
 import type { Neighbour, ScanStopReading, SkylineStop } from '@/lib/mockData'
 
@@ -14,7 +14,9 @@ export function SkylineFlow({
   onApply,
   onSkip,
   latitude,
+  standHere,
 }: {
+  standHere?: ReactNode
   readings: ScanStopReading[]
   baseHorizon: number[]
   /** Drops the parts of the skyline already counted as tall neighbours. */
@@ -38,6 +40,7 @@ export function SkylineFlow({
       onApply={() => onApply(stops)}
       onSkip={onSkip}
       latitude={latitude}
+      standHere={standHere}
     />
   )
 }

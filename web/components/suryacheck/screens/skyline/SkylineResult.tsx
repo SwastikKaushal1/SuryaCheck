@@ -1,5 +1,5 @@
 import { Camera, Plus, RotateCcw, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { PairWithPhone } from './PairWithPhone'
 import { SweepDemo } from './SweepDemo'
 import { askMotionPermission, canPhoneScan, PhoneScan } from './PhoneScan'
@@ -52,7 +52,10 @@ export function SkylineResult({
   onApply,
   onSkip,
   latitude = 28.6,
+  standHere,
 }: {
+  /** Map of where the panels will go, so the person knows where to stand for the scan. */
+  standHere?: ReactNode
   /** House latitude, for the sun's paths on the chart (Delhi if unknown). */
   latitude?: number
   stops: SkylineStop[]
@@ -303,6 +306,7 @@ export function SkylineResult({
       </Card>
 
       <div className="flex flex-col gap-5">
+      {standHere}
       <Card className="flex flex-col gap-2">
         <p className="text-base font-bold text-ink">Measure it with your phone (about 30 seconds)</p>
         <SweepDemo />
