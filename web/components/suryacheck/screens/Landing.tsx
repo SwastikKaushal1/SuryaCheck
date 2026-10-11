@@ -2,6 +2,7 @@ import { ArrowRight, Building2, Check, FileText, Home, Scale, ScanLine, Smartpho
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../Button'
 import { MapPlaceholder } from '../MapPlaceholder'
+import { PhoneScanMock } from './skyline/PhoneScanMock'
 import { api, isAbort, toApiError, type Place } from '@/lib/api'
 import { toPoints } from '@/lib/geometry'
 import { sampleRoof } from '@/lib/mockData'
@@ -102,14 +103,10 @@ function StepScene({ i }: { i: number }) {
     )
   if (i === 2)
     return (
-      <svg viewBox="0 0 200 90" className={common} aria-hidden="true">
-        <path d="M0 90 V62 H22 V40 H46 V58 H60 V30 L66 14 L72 30 V58 H92 A16 16 0 0 1 124 54 V48 H150 V36 H176 V60 H200 V90 Z" fill="#0f5c5e" opacity=".85" />
-        <path className="hs-trace" pathLength={100} d="M0 62 H22 V40 H46 V58 H60 V30 L66 14 L72 30 V58 H92 A16 16 0 0 1 124 54 V48 H150 V36 H176 V60 H200" fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinejoin="round" />
-        <g className="hs-phone">
-          <rect x="-11" y="-18" width="22" height="36" rx="4" fill="#1f2937" stroke="#fff" strokeWidth="1.5" />
-          <circle r="5" fill="none" stroke="#fbbf24" strokeWidth="1.5" />
-          <circle r="1.3" fill="#fbbf24" />
-        </g>
+      <svg viewBox="0 0 120 112" className={common} aria-hidden="true">
+        {/* the street behind, and the phone running our scan screen in front of it */}
+        <path d="M-60 112 V80 H-36 V58 H-10 V74 H4 V44 L10 28 L16 44 V74 H36 V70 H84 V60 H110 V52 H136 V76 H180 V112 Z" fill="#0f5c5e" opacity=".22" />
+        <PhoneScanMock className="drop-shadow-md" transform="translate(30 2)" />
       </svg>
     )
   if (i === 3)
@@ -223,6 +220,10 @@ function AnimatedPreview() {
           <path d="M0 300 V268 H34 V250 H70 V266 H96 V238 L102 222 L108 238 V266 H150 A20 20 0 0 1 190 262 V256 H236 V246 H272 V262 H312 V252 H350 V270 H400 V300 Z" fill="#0f5c5e" fillOpacity="0.8" />
         </g>
         <path className="sp-trace" pathLength={100} d="M0 268 H34 V250 H70 V266 H96 V238 L102 222 L108 238 V266 H150 A20 20 0 0 1 190 262 V256 H236 V246 H272 V262 H312 V252 H350 V270 H400" fill="none" stroke="#FBBF24" strokeWidth="3" strokeLinejoin="round" />
+        {/* the phone doing the sweep, as on our real scan screen */}
+        <g className="sp-phone">
+          <PhoneScanMock dur={3} transform="translate(322 112) scale(.95)" />
+        </g>
 
         {/* water tank and staircase room */}
         <g className="sp-obs">
@@ -519,7 +520,7 @@ export function Landing({ onPlace }: { onPlace: (place: Place) => void }) {
           <SectionHead eyebrow="How it works" title="Five steps, about three minutes" />
         </Reveal>
         <Reveal className="relative">
-          <div aria-hidden="true" className="absolute left-[10%] right-[10%] top-[68px] hidden lg:block">
+          <div aria-hidden="true" className="absolute left-[10%] right-[10%] top-[84px] hidden lg:block">
             <span className="step-line block h-0.5 rounded bg-gradient-to-r from-sun via-sun-dark to-teal-deep" />
             <span className="step-dot absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-sun shadow-[0_0_0_4px_rgba(245,158,11,0.25)]" />
           </div>
@@ -527,7 +528,7 @@ export function Landing({ onPlace }: { onPlace: (place: Place) => void }) {
             {STEPS.map(({ icon: Icon, title, text }, i) => (
               <Reveal as="li" key={title} delay={i * 120} className="group">
                 <div className="step-glow flex h-full flex-col gap-3 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-amber-900/5 transition duration-300 hover:shadow-lg" style={{ animationDelay: `${i * 2}s` }}>
-                  <div className="h-24 overflow-hidden rounded-xl bg-gradient-to-br from-sun-soft/70 to-sand/70">
+                  <div className="h-32 overflow-hidden rounded-xl bg-gradient-to-br from-sun-soft/70 to-sand/70">
                     <StepScene i={i} />
                   </div>
                   <div className="flex items-center gap-3">

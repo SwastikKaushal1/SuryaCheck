@@ -188,6 +188,7 @@
 .sp-sun { animation: sp-sun 8s linear infinite; }
 .sp-sky { animation: sp-sky 8s ease-in-out infinite; }
 .sp-trace { stroke-dasharray: 100; animation: sp-trace 8s ease-in-out infinite; }
+.sp-phone { animation: sp-phone 8s ease-in-out infinite; }
 .sp-cap { opacity: 0; }
 .sp-cap-1 { animation: sp-cap-1 8s linear infinite; }
 .sp-cap-2 { animation: sp-cap-2 8s linear infinite; }
@@ -202,6 +203,7 @@
 @keyframes sp-sun { 0% { transform: translateX(-150px); opacity: 0; } 8% { opacity: 1; } 88% { opacity: 1; } 100% { transform: translateX(150px); opacity: 0; } }
 @keyframes sp-sky { 0%, 34% { opacity: 0; transform: translateY(14px); } 40%, 90% { opacity: 1; transform: none; } 97%, 100% { opacity: 0; } }
 @keyframes sp-trace { 0%, 38% { stroke-dashoffset: 100; opacity: 1; } 50%, 90% { stroke-dashoffset: 0; opacity: 1; } 97%, 100% { stroke-dashoffset: 0; opacity: 0; } }
+@keyframes sp-phone { 0%, 34% { opacity: 0; transform: translateY(20px); } 40%, 54% { opacity: 1; transform: none; } 60%, 100% { opacity: 0; transform: none; } }
 @keyframes sp-cap-1 { 0%, 22% { opacity: 1; } 24%, 100% { opacity: 0; } }
 @keyframes sp-cap-2 { 0%, 22% { opacity: 0; } 24%, 36% { opacity: 1; } 38%, 100% { opacity: 0; } }
 @keyframes sp-cap-3 { 0%, 36% { opacity: 0; } 38%, 50% { opacity: 1; } 52%, 100% { opacity: 0; } }
@@ -217,6 +219,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sp-draw, .sp-fill, .sp-obs, .sp-shadow, .sp-panel, .sp-badge, .sp-sun, .sp-sky, .sp-trace { animation: none; }
+  .sp-phone { animation: none; opacity: 0; }
   .sp-cap-1, .sp-cap-2, .sp-cap-3 { animation: none; opacity: 0; }
   .sp-cap-4 { animation: none; opacity: 1; }
   .sp-shadow { opacity: .55; }
