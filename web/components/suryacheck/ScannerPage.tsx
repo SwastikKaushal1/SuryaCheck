@@ -50,11 +50,13 @@ export function ScannerPage({ initialCode }: { initialCode: string }) {
   if (stage === 'scanning') {
     return (
       <PhoneScan
-        status={failed ? 'Not reaching your laptop. Check your internet.' : `Linked to your laptop · code ${code} · ${sent} sent`}
-        onMark={(m) => void send(api.pairMark(code, m))}
-        onUndo={() => void send(api.pairUndo(code))}
-        doneLabel="Finish"
-        onDone={() => setStage('done')}
+        status={failed ? 'Not reaching your laptop. Check your internet.' : `Linked to your laptop · code ${code} · ${sent} readings sent`}
+        onProfile={(marks) => void send(api.pairProfile(code, marks))}
+        doneLabel="Send to my laptop"
+        onDone={(marks) => {
+          void send(api.pairProfile(code, marks))
+          setStage('done')
+        }}
         onCancel={() => setStage('code')}
       />
     )
@@ -69,7 +71,7 @@ export function ScannerPage({ initialCode }: { initialCode: string }) {
             <CheckCircle2 className="size-14 text-teal-deep" aria-hidden="true" />
             <h1 className="text-2xl font-bold text-ink">Done! Check your laptop.</h1>
             <p className="text-base text-ink-soft">
-              {sent} direction{sent === 1 ? '' : 's'} sent. Your skyline is on the laptop now; review it there and continue your plan.
+              {sent} readings sent. Your skyline is on the laptop now: it shows when the sun is hidden, and you can fix any point there.
             </p>
             <Button variant="secondary" onClick={() => setStage('scanning')}>
               <Camera className="size-5" aria-hidden="true" />

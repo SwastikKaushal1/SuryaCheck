@@ -160,6 +160,73 @@ export function mergeScan(stops: SkylineStop[], marks: { bearing: number; elevat
   return next
 }
 
+/**
+ * A continuous phone sweep (readings every few degrees) becomes one skyline point per 10°, the
+ * resolution PVGIS uses, keeping the tallest reading in each slice so a thin tower is not lost.
+ */
+export function profileToStops(marks: { bearing: number; elevation: number }[]): SkylineStop[] {
+  const tallest = new Map<number, number>()
+  for (const m of marks) {
+    if (m.bearing < SCAN_FROM || m.bearing > SCAN_TO) continue
+    const b = Math.round(m.bearing / 10) * 10
+    tallest.set(b, Math.max(tallest.get(b) ?? 0, clamp(Math.round(m.elevation), 0, 45)))
+  }
+  return [...tallest.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([bearing, elevation]) => ({ id: `sweep-${bearing}`, label: `${bearing}°`, bearing, elevation, scannedElevation: 3, added: true }))
+}
+
+/** A sweep covers at least this many 10° slices; fewer readings are treated as separate marks. */
+const SWEEP_MIN_SLICES = 6
+
+/**
+ * Puts any phone scan on the skyline. A sweep replaces the directions it covered with its own
+ * fine-grained points (directions outside the sweep are kept); a few single marks update the
+ * nearest directions, as mergeScan does.
+ */
+export function applyScan(stops: SkylineStop[], marks: { bearing: number; elevation: number }[], base: number[]): SkylineStop[] {
+  const sweep = profileToStops(marks)
+  if (sweep.length < SWEEP_MIN_SLICES) return mergeScan(stops, marks, base)
+  const from = sweep[0].bearing - 10
+  const to = sweep[sweep.length - 1].bearing + 10
+  return [...stops.filter((s) => s.bearing < from || s.bearing > to), ...sweep]
+}
+
+export interface SunPathPoint {
+  hour: number
+  azimuth: number
+  elevation: number
+  /** True when the skyline hides the sun at this moment. */
+  blocked: boolean
+}
+
+/** The sun's track across the sky on the three sample days, every 15 minutes, marked where the skyline hides it. */
+export function sunPaths(horizon: number[], lat: number): { season: Season; points: SunPathPoint[] }[] {
+  return seasonsFor(lat).map((season) => {
+    const points: SunPathPoint[] = []
+    for (let h = 4.5; h <= 19.5; h += 0.25) {
+      const sun = sunPosition(season, h)
+      if (sun.elevation <= 0) continue
+      // The open-sky baseline is ~3° of haze, not an obstacle: only a skyline above that counts as hiding the sun.
+      const sky = horizonAt(horizon, sun.azimuth)
+      points.push({ hour: h, ...sun, blocked: sky > 3.5 && sun.elevation < sky })
+    }
+    return { season, points }
+  })
+}
+
+/** Time ranges (solar time, hours) when the skyline hides the sun, e.g. [[7.25, 8.75], [16, 17.5]]. */
+export function blockedRanges(points: SunPathPoint[]): [number, number][] {
+  const out: [number, number][] = []
+  for (const p of points) {
+    if (!p.blocked) continue
+    const last = out[out.length - 1]
+    if (last && p.hour - last[1] < 0.26) last[1] = p.hour
+    else out.push([p.hour, p.hour])
+  }
+  return out.map(([a, b]) => [a, b + 0.25])
+}
+
 /** 135 -> "SE" */
 export const shortCompass = (bearing: number) =>
   compassName(bearing)

@@ -11,7 +11,7 @@ import threading
 import time
 
 TTL_S = 30 * 60
-MAX_MARKS = 40
+MAX_MARKS = 120  # a phone sweep sends one reading per 5° slice (49 from east to west)
 
 
 class PairStore:
@@ -64,6 +64,16 @@ class PairStore:
                 return None
             if len(s["marks"]) < MAX_MARKS:
                 s["marks"].append({"bearing": round(bearing, 1), "elevation": round(elevation, 1)})
+            s["phoneSeen"] = s["updated"] = time.time()
+            return len(s["marks"])
+
+    def set_marks(self, code, marks):
+        """A phone sweep sends its whole traced skyline at once; it replaces what was there."""
+        with self._lock:
+            s = self._get(code)
+            if not s:
+                return None
+            s["marks"] = [{"bearing": round(m["bearing"], 1), "elevation": round(m["elevation"], 1)} for m in marks[:MAX_MARKS]]
             s["phoneSeen"] = s["updated"] = time.time()
             return len(s["marks"])
 

@@ -4,7 +4,7 @@ import { Button } from '../../Button'
 import { Card } from '../../Card'
 import { api, toApiError } from '@/lib/api'
 import type { SkylineStop } from '@/lib/mockData'
-import { mergeScan } from '@/lib/solar'
+import { applyScan } from '@/lib/solar'
 
 const POLL_MS = 1000
 /** Stop asking after this long with nothing new, so a forgotten tab doesn't poll forever. */
@@ -67,7 +67,7 @@ export function PairWithPhone({
           lastKey.current = key
           lastNews = Date.now()
           setReceived(v.marks.length)
-          latest.current.onChange(mergeScan(before.current, v.marks, latest.current.baseHorizon))
+          latest.current.onChange(applyScan(before.current, v.marks, latest.current.baseHorizon))
         }
         if (Date.now() - lastNews > IDLE_STOP_MS) setPhase({ kind: 'ended', note: 'Stopped listening after 10 quiet minutes. Your marks are kept.' })
       } catch (e) {

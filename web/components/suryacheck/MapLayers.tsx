@@ -67,6 +67,79 @@ export function EdgeLengths({ points, mpu = GEO_MPU, closed = true }: { points: 
 }
 
 /** Soft shadows cast by tanks, rooms and tall neighbours. */
+/** Skyline heights below this are open sky (the scan's baseline). */
+const OPEN_SKY_DEG = 3.5
+
+/**
+ * The scanned surroundings drawn around the roof: in each direction a band whose thickness and colour
+ * show how high the buildings and trees rise there. A scan gives direction and height, not distance,
+ * so this is a compass of the skyline, not building outlines.
+ */
+export function SkylineRing({ horizon, roof, mpu = GEO_MPU }: { horizon: number[]; roof: Point[]; mpu?: number }) {
+  const { scale } = useMapView()
+  if (!horizon.some((h) => h > OPEN_SKY_DEG)) return null
+  const c = { x: roof.reduce((s, p) => s + p.x, 0) / roof.length, y: roof.reduce((s, p) => s + p.y, 0) / roof.length }
+  const r0 = Math.max(...roof.map((p) => Math.hypot(p.x - c.x, p.y - c.y))) + 2 / mpu
+  const perDeg = 0.3 / mpu // band grows 0.3 m per degree of skyline height
+  const at = (bearing: number, r: number) => ({ x: c.x + Math.sin((bearing * Math.PI) / 180) * r, y: c.y - Math.cos((bearing * Math.PI) / 180) * r })
+  const tallest = horizon.reduce((best, h, i) => (h > horizon[best] ? i : best), 0)
+  const labelAt = at(tallest * 10, r0 + horizon[tallest] * perDeg + 4 / mpu)
+  return (
+    <g pointerEvents="none">
+      {horizon.map((h, i) => {
+        if (h <= OPEN_SKY_DEG) return null
+        const a = i * 10 - 5
+        const b = i * 10 + 5
+        const r1 = r0 + h * perDeg
+        const pts = [at(a, r0), at(b, r0), at(b, r1), at(a, r1)]
+        const strength = Math.min(1, h / 35)
+        return (
+          <polygon
+            key={i}
+            points={toPoints(pts)}
+            fill={`rgba(15, 92, 94, ${0.25 + 0.55 * strength})`}
+            stroke="rgba(255,255,255,0.7)"
+            strokeWidth="1"
+            vectorEffect="non-scaling-stroke"
+          />
+        )
+      })}
+      <g transform={`translate(${labelAt.x} ${labelAt.y})`}>
+        <text textAnchor="middle" fontSize={11 / scale} fontWeight="800" fill="#fff" stroke="#0b3d3f" strokeWidth={3 / scale} paintOrder="stroke">
+          tallest {Math.round(horizon[tallest])}°
+        </text>
+      </g>
+    </g>
+  )
+}
+
+/**
+ * Where the sun is right now, drawn just outside the skyline ring with a dashed line to the roof,
+ * so the person can watch it pass behind the surroundings while the day plays. Red when hidden.
+ */
+export function SunMarker({ roof, azimuth, elevation, hidden, mpu = GEO_MPU }: { roof: Point[]; azimuth: number; elevation: number; hidden: boolean; mpu?: number }) {
+  const { scale } = useMapView()
+  if (elevation <= 0) return null
+  const c = { x: roof.reduce((s, p) => s + p.x, 0) / roof.length, y: roof.reduce((s, p) => s + p.y, 0) / roof.length }
+  const r = Math.max(...roof.map((p) => Math.hypot(p.x - c.x, p.y - c.y))) + 2 / mpu + 45 * (0.3 / mpu) + 3 / mpu // beyond the tallest ring band
+  const a = (azimuth * Math.PI) / 180
+  const s = { x: c.x + Math.sin(a) * r, y: c.y - Math.cos(a) * r }
+  const colour = hidden ? '#DC2626' : '#F59E0B'
+  return (
+    <g pointerEvents="none">
+      <line x1={c.x} y1={c.y} x2={s.x} y2={s.y} stroke={colour} strokeWidth="2" strokeDasharray="6 5" vectorEffect="non-scaling-stroke" opacity="0.9" />
+      <circle cx={s.x} cy={s.y} r={14 / scale} fill={colour} fillOpacity="0.25" />
+      <circle cx={s.x} cy={s.y} r={8 / scale} fill={colour} stroke="#fff" strokeWidth={2 / scale} />
+    </g>
+  )
+}
+
+/** Dims the whole roof while the sun is behind the scanned surroundings (far buildings shade all of it at once). */
+export function SkylineShade({ roof, active }: { roof: Point[]; active: boolean }) {
+  if (!active) return null
+  return <polygon points={toPoints(roof)} fill="#0b1a12" fillOpacity="0.45" pointerEvents="none" className="sc-fade-in" />
+}
+
 export function ShadowLayer({ shadows }: { shadows: Point[][] }) {
   return (
     <g pointerEvents="none">

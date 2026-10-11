@@ -477,6 +477,7 @@ export default function App() {
           heatmap={heatmap}
           onHeatmap={setHeatmap}
           scanDone={scanDone}
+          skylineHorizon={effectiveHorizon}
           ownHouse={inputs.ownHouse}
           residential={inputs.residential}
           subsidyRules={financeParamsFrom(ref, place.stateCode).subsidy}
@@ -497,6 +498,7 @@ export default function App() {
           neighbourSides={neighbours.map((n) => n.side)}
           onApply={applySkyline}
           onSkip={skipSkyline}
+          latitude={frame.lat}
         />
       )}
 

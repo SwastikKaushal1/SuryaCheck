@@ -178,4 +178,18 @@ const merged = mergeScan(baseStops, [{ bearing: 140, elevation: 25 }, { bearing:
 ok(merged.find((s) => s.bearing === 135)!.elevation === 27, 'a mark near SE updates SE (last mark wins)')
 ok(merged.find((s) => s.bearing === 180)!.elevation === 18 && merged.some((s) => s.bearing === 296 && s.elevation === 12 && s.added), 'a mark snaps to the nearest direction; one past the last direction is added')
 ok(!merged.some((s) => s.bearing === 10) && merged.length === 6, 'marks facing north are left out')
+// phone sweep: dense readings -> fine skyline, a narrow tower stays narrow, and the sun's hidden times
+import { applyScan, blockedRanges, profileToStops, sunPaths } from '../lib/solar'
+const sweep = Array.from({ length: 49 }, (_, i) => 60 + i * 5).map((b) => ({ bearing: b, elevation: b === 150 || b === 155 ? 35 : 4 })) // a tower at ~152°
+const sweepStops = profileToStops(sweep)
+ok(sweepStops.length === 25 && sweepStops.find((s) => s.bearing === 150)!.elevation === 35, `a sweep becomes one point per 10° and keeps the tower (${sweepStops.length} points)`)
+ok(sweepStops.filter((s) => s.elevation > 10).length <= 2, 'the narrow tower stays narrow (at most 2 slices tall)')
+const applied = applyScan(baseStops, sweep, Array(36).fill(3))
+ok(applied.length === 25 && !applied.some((s) => s.id === 's135'), 'a sweep replaces the 5 default directions it covers')
+ok(applyScan(baseStops, [{ bearing: 140, elevation: 20 }], Array(36).fill(3)).length === 5, 'a single mark still just updates the nearest direction')
+const towerHorizon = Array.from({ length: 36 }, (_, i) => (i === 15 || i === 16 ? 40 : 3)) // a 40° block at 150-160°
+const winterPath = sunPaths(towerHorizon, 28.6)[0].points
+const hidden = blockedRanges(winterPath)
+ok(hidden.length === 1 && hidden[0][0] > 8.5 && hidden[0][1] < 12, `a tall block to the south-south-east hides the winter sun only for a while in the morning (${hidden.map(([a, b]) => `${a}-${b}`).join(', ')})`)
+ok(blockedRanges(sunPaths(Array(36).fill(3), 28.6)[1].points).length === 0, 'open sky: the equinox sun is never hidden')
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED'); process.exit(fails ? 1 : 0)

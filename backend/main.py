@@ -175,6 +175,17 @@ def pair_mark(r: MarkReq, code: str = Path(..., pattern=CODE)):
     return {"count": n} if n is not None else _no_session()
 
 
+class ProfileReq(BaseModel):
+    marks: List[MarkReq] = Field(..., max_length=120)
+
+
+@app.post("/pair/{code}/profile")
+def pair_profile(r: ProfileReq, code: str = Path(..., pattern=CODE)):
+    """The phone's traced skyline so far, sent as a whole while sweeping."""
+    n = pairing.store.set_marks(code, [m.model_dump() for m in r.marks])
+    return {"count": n} if n is not None else _no_session()
+
+
 @app.delete("/pair/{code}/marks/last")
 def pair_undo(code: str = Path(..., pattern=CODE)):
     n = pairing.store.undo(code)

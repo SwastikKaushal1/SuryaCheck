@@ -169,5 +169,7 @@ export const api = {
   pairHello: (code: string) => request<{ ok: boolean }>(`/pair/${code}/hello`, { method: 'POST' }),
   pairMark: (code: string, mark: { bearing: number; elevation: number }) =>
     request<{ count: number }>(`/pair/${code}/marks`, { method: 'POST', body: JSON.stringify(mark) }),
+  pairProfile: (code: string, marks: { bearing: number; elevation: number }[]) =>
+    request<{ count: number }>(`/pair/${code}/profile`, { method: 'POST', body: JSON.stringify({ marks }) }),
   pairUndo: (code: string) => request<{ count: number }>(`/pair/${code}/marks/last`, { method: 'DELETE' }),
 }
