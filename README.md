@@ -202,7 +202,6 @@ SuryaCheck gives **estimates, not quotations**. Costs, tariffs, subsidy top-ups 
 
 ## 🛣️ What's next
 
-- AWS deployment (Lambda + S3 + CloudFront)
 - Panel size choice (for example 1.7 × 1.0 m, 400 W)
 - Photo-based obstacle suggestions
 - More states' tariffs and subsidy top-ups
