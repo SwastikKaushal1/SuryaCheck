@@ -14,11 +14,9 @@ No login. No machine learning. Every number can be explained and checked.
 
 > Built at **Bharat Builds Tour, Environmental Hacks** (Oct 8 to 11, 2026) by **Swastik Kaushal**. Track 03: Waste and Energy.
 
-**🌐 Live app: [d3s69kasxcslyo.cloudfront.net](https://d3s69kasxcslyo.cloudfront.net)** (hosted on AWS: S3 + CloudFront, API on Lambda)
-
 **🎬 Demo video: [youtu.be/wh6qYJc2h3k](https://youtu.be/wh6qYJc2h3k)** (3-minute walkthrough: roof, obstacles, phone skyline scan, solar plan, AWS)
 
-[Run it](#-run-it) · [How it works](#-how-it-works) · [Deploy on AWS](#%EF%B8%8F-deploy-on-aws) · [Report a bug](../../issues)
+[Run it](#-run-it) · [How it works](#-how-it-works) · [Deploy on Vercel](#-deploy-on-vercel) · [Report a bug](../../issues)
 
 ---
 
@@ -156,9 +154,32 @@ Errors always come back as `{ "error", "hint" }`.
 | Address search | Nominatim (India only) |
 | Roof outlines | OpenStreetMap through Overpass |
 
+## ▲ Deploy on Vercel
+
+SuryaCheck runs on Vercel's free plan as **two projects from this one repo**:
+
+```
+Browser ─▶ suryacheck (Next.js, web/) ──/backend/*──▶ suryacheck-api (FastAPI, backend/)
+                                                        ├─▶ PVGIS (solar yield)
+                                                        └─▶ OpenStreetMap: Nominatim, Overpass, Photon
+```
+
+The browser only ever talks to the website; the website forwards `/backend/*` to the API project, so there is no CORS to set up.
+
+| Vercel project | Root Directory | Environment variables |
+|---|---|---|
+| `suryacheck-api` | `backend` | none needed (optional: `CORS_ORIGINS=https://<your-site>.vercel.app`) |
+| `suryacheck` | `web` | `NEXT_PUBLIC_API_URL=/backend` and `BACKEND_URL=https://<your-api>.vercel.app` |
+
+1. **API:** on [vercel.com](https://vercel.com), **Add New → Project**, import this repo, set **Root Directory** to `backend` and deploy. Vercel finds the FastAPI `app` in `main.py` by itself. Check `https://<your-api>.vercel.app/health` answers `{"ok":true,…}`.
+2. **Website:** **Add New → Project** again with the same repo, **Root Directory** `web` (Next.js is detected), add the two environment variables above with your API's URL, and deploy.
+3. Optional: turn on **Analytics** in the website project for page-view counts.
+
+Every push to `main` redeploys both. Note: phone-to-laptop pairing keeps its codes in the API's memory, so a pairing can occasionally be lost between server instances; a shared store such as Upstash Redis fixes that (see What's next).
+
 ## ☁️ Deploy on AWS
 
-SuryaCheck deploys to AWS with **AWS SAM** (open source) in one command:
+The hackathon version ran on AWS. It still deploys with **AWS SAM** (open source) in one command:
 
 ```
 Browser ─▶ CloudFront ─▶ S3 (static Next.js export, private bucket)
