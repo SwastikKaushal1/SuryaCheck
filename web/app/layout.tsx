@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Bricolage_Grotesque, Hind } from 'next/font/google'
+import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
 const hind = Hind({
@@ -37,6 +38,8 @@ export default function RootLayout({
     <html lang="en" className={`${hind.variable} ${bricolage.variable}`}>
       <body className="antialiased">
         {children}
+        {/* Page-view counts in the Vercel dashboard; off everywhere else. */}
+        {process.env.VERCEL && <Analytics />}
       </body>
     </html>
   )

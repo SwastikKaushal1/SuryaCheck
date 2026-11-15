@@ -29,7 +29,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: build/api/
-      Handler: main.handler
+      Handler: lambda_handler.handler
       Description: SuryaCheck API (geocode, roof outline, PVGIS yield, finance)
       Environment:
         Variables:

@@ -5,8 +5,9 @@ const nextConfig = {
   // STATIC_EXPORT=1 writes a plain static site to web/out for S3 + CloudFront (see infra/deploy.ps1).
   // The whole app runs in the browser, so nothing is lost. Docker and `pnpm dev` keep the normal server.
   ...(staticExport ? { output: 'export' } : {}),
-  // Dev only: /backend/* is forwarded to the local FastAPI server, so a phone on your Wi-Fi (or a tunnel)
-  // only needs the website's address. Use it with NEXT_PUBLIC_API_URL=/backend.
+  // /backend/* is forwarded to the FastAPI server (BACKEND_URL; the local one in dev). The browser then only talks
+  // to the website's own address: no CORS, and a phone on your Wi-Fi or a tunnel works too.
+  // Use it with NEXT_PUBLIC_API_URL=/backend. On Vercel, BACKEND_URL is the suryacheck-api project's URL.
   ...(staticExport
     ? {}
     : {

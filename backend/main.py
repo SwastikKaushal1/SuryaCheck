@@ -6,7 +6,6 @@ from fastapi import FastAPI, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from mangum import Mangum
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -35,7 +34,7 @@ async def on_any(request: Request, call_next):
 
 
 # Added after the catch-all, so it wraps it and adds CORS headers to every answer.
-# On AWS, CORS_ORIGINS lists the CloudFront site (set by infra/template.yaml); locally anything may call it.
+# CORS_ORIGINS lists the sites allowed to call the API (e.g. the Vercel site, or CloudFront on AWS); locally anything may.
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS,
                    allow_methods=["GET", "POST", "DELETE", "OPTIONS"], allow_headers=["*"])
@@ -212,6 +211,3 @@ def _prewarm():
 
 if os.environ.get("PREWARM") == "1":
     threading.Thread(target=_prewarm, daemon=True).start()
-
-# AWS Lambda entry point (infra/template.yaml: Handler main.handler). The app has no startup work.
-handler = Mangum(app, lifespan="off")
