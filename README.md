@@ -156,26 +156,22 @@ Errors always come back as `{ "error", "hint" }`.
 
 ## ▲ Deploy on Vercel
 
-SuryaCheck runs on Vercel's free plan as **two projects from this one repo**:
+SuryaCheck runs on Vercel's free plan as **one project with two [services](https://vercel.com/docs/services)**, set up in [`vercel.json`](vercel.json):
 
 ```
-Browser ─▶ suryacheck (Next.js, web/) ──/backend/*──▶ suryacheck-api (FastAPI, backend/)
-                                                        ├─▶ PVGIS (solar yield)
-                                                        └─▶ OpenStreetMap: Nominatim, Overpass, Photon
+Browser ─▶ your-site.vercel.app ─┬─ /backend/* ─▶ backend (FastAPI, backend/) ─┬─▶ PVGIS (solar yield)
+                                 │                                             └─▶ OpenStreetMap: Nominatim, Overpass, Photon
+                                 └─ everything else ─▶ web (Next.js, web/)
 ```
 
-The browser only ever talks to the website; the website forwards `/backend/*` to the API project, so there is no CORS to set up.
+The site and the API share one domain, so there is no CORS to set up and no environment variables to add: on Vercel the site calls the API at `/backend` by itself.
 
-| Vercel project | Root Directory | Environment variables |
-|---|---|---|
-| `suryacheck-api` | `backend` | none needed (optional: `CORS_ORIGINS=https://<your-site>.vercel.app`) |
-| `suryacheck` | `web` | `NEXT_PUBLIC_API_URL=/backend` and `BACKEND_URL=https://<your-api>.vercel.app` |
+1. On [vercel.com](https://vercel.com), **Add New → Project** and import this repo.
+2. Leave **Root Directory** as `./`. The **Application Preset** shows **Services** (it reads `vercel.json`).
+3. **Deploy**. Then check `https://<your-site>.vercel.app/backend/health` answers `{"ok":true,…}`.
+4. Optional: turn on **Analytics** for page-view counts.
 
-1. **API:** on [vercel.com](https://vercel.com), **Add New → Project**, import this repo, set **Root Directory** to `backend` and deploy. Vercel finds the FastAPI `app` in `main.py` by itself. Check `https://<your-api>.vercel.app/health` answers `{"ok":true,…}`.
-2. **Website:** **Add New → Project** again with the same repo, **Root Directory** `web` (Next.js is detected), add the two environment variables above with your API's URL, and deploy.
-3. Optional: turn on **Analytics** in the website project for page-view counts.
-
-Every push to `main` redeploys both. Note: phone-to-laptop pairing keeps its codes in the API's memory, so a pairing can occasionally be lost between server instances; a shared store such as Upstash Redis fixes that (see What's next).
+Every push to `main` redeploys. Note: phone-to-laptop pairing keeps its codes in the API's memory, so a pairing can occasionally be lost between server instances; a shared store such as Upstash Redis fixes that (see What's next).
 
 ## ☁️ Deploy on AWS
 

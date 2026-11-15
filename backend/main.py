@@ -40,6 +40,27 @@ app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS,
                    allow_methods=["GET", "POST", "DELETE", "OPTIONS"], allow_headers=["*"])
 
 
+# On Vercel the site and the API share one domain: vercel.json sends /backend/* here with the prefix kept.
+# Drop it before routing, so routes stay /health, /geocode, … (plain requests without it still work).
+API_PREFIX = "/backend"
+
+
+class StripApiPrefix:
+    def __init__(self, inner):
+        self.inner = inner
+
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path", "")
+        if scope["type"] in ("http", "websocket") and (path == API_PREFIX or path.startswith(API_PREFIX + "/")):
+            short = path[len(API_PREFIX):] or "/"
+            scope = {**scope, "path": short, "raw_path": short.encode()}
+        await self.inner(scope, receive, send)
+
+
+# Added last, so it runs first: every other layer sees the short path.
+app.add_middleware(StripApiPrefix)
+
+
 @app.exception_handler(RequestValidationError)
 async def on_validation(_: Request, exc: RequestValidationError):
     first = exc.errors()[0] if exc.errors() else {}
